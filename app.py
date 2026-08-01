@@ -9,6 +9,45 @@ from dotenv import load_dotenv
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev-dashboard-key-12345')
 
+# Helper: Find the absolute path of a file with sibling/upward directory fallback
+def find_workspace_file(filename, subfolder=None):
+    # Try direct sibling first
+    current_dir = os.path.abspath(os.path.dirname(__file__))
+    
+    # 1. Direct sibling directory check (e.g. personal-dashboard/../subfolder/filename)
+    if subfolder:
+        path = os.path.abspath(os.path.join(current_dir, '..', subfolder, filename))
+    else:
+        path = os.path.abspath(os.path.join(current_dir, '..', filename))
+        
+    if os.path.exists(path):
+        return path
+        
+    # 2. Parallel workspace check (e.g. searching from parent)
+    parent_dir = os.path.dirname(current_dir)
+    if subfolder:
+        path = os.path.abspath(os.path.join(parent_dir, subfolder, filename))
+    else:
+        path = os.path.abspath(os.path.join(parent_dir, filename))
+        
+    if os.path.exists(path):
+        return path
+        
+    # 3. Double-upward backup (just in case directory structure is nested)
+    grandparent_dir = os.path.dirname(parent_dir)
+    if subfolder:
+        path = os.path.abspath(os.path.join(grandparent_dir, subfolder, filename))
+    else:
+        path = os.path.abspath(os.path.join(grandparent_dir, filename))
+        
+    if os.path.exists(path):
+        return path
+        
+    # Default fallback to original assumed sibling path
+    if subfolder:
+        return os.path.abspath(os.path.join(current_dir, '..', subfolder, filename))
+    return os.path.abspath(os.path.join(current_dir, '..', filename))
+
 # Auto-discover credentials from workspace siblings
 def discover_credentials():
     creds = {
@@ -19,8 +58,7 @@ def discover_credentials():
     }
     
     # 1. Try loading from outlook-mcp/.env
-    outlook_dir = os.path.join(os.path.dirname(__file__), '..', 'outlook-mcp')
-    outlook_env = os.path.join(outlook_dir, '.env')
+    outlook_env = find_workspace_file('.env', 'outlook-mcp')
     if os.path.exists(outlook_env):
         try:
             with open(outlook_env, 'r') as f:
@@ -32,10 +70,10 @@ def discover_credentials():
                             if k in ['CLIENT_ID', 'TENANT_ID'] and not creds[k]:
                                 creds[k] = v
         except Exception as e:
-            print(f"Error loading outlook-mcp/.env: {e}")
+            print(f"Error loading outlook-mcp/.env from {outlook_env}: {e}")
             
     # 2. Try loading Monday API token from monitor_monday.sh
-    monitor_sh = os.path.join(os.path.dirname(__file__), '..', 'monitor_monday.sh')
+    monitor_sh = find_workspace_file('monitor_monday.sh')
     if os.path.exists(monitor_sh) and not creds['MONDAY_API_TOKEN']:
         try:
             with open(monitor_sh, 'r') as f:
@@ -65,9 +103,9 @@ def get_outlook_token():
     if not client_id:
         return None, "CLIENT_ID is missing"
         
-    cache_path = os.path.join(os.path.dirname(__file__), '..', 'outlook-mcp', 'token_cache.json')
+    cache_path = find_workspace_file('token_cache.json', 'outlook-mcp')
     if not os.path.exists(cache_path):
-        return None, "MSAL token cache file not found in outlook-mcp folder"
+        return None, f"MSAL token cache file not found. Searched at: {cache_path}"
         
     try:
         with open(cache_path, 'r') as f:
