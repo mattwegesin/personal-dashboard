@@ -103,14 +103,29 @@ def get_outlook_token():
     if not client_id:
         return None, "CLIENT_ID is missing"
         
-    cache_path = find_workspace_file('token_cache.json', 'outlook-mcp')
-    if not os.path.exists(cache_path):
-        return None, f"MSAL token cache file not found. Searched at: {cache_path}"
-        
-    try:
-        with open(cache_path, 'r') as f:
-            cache = json.load(f)
+    cache = None
+    
+    # 1. Try loading from environment variable (ideal for Render cloud hosting)
+    env_cache = os.environ.get('OUTLOOK_TOKEN_CACHE_JSON')
+    if env_cache:
+        try:
+            cache = json.loads(env_cache)
+        except Exception as e:
+            return None, f"Error parsing OUTLOOK_TOKEN_CACHE_JSON environment variable: {str(e)}"
             
+    # 2. If not in env, fallback to loading the physical file (ideal for local development)
+    if not cache:
+        cache_path = find_workspace_file('token_cache.json', 'outlook-mcp')
+        if not os.path.exists(cache_path):
+            return None, f"MSAL token cache file not found. For local testing, ensure outlook-mcp/token_cache.json exists. For Render deployment, configure the OUTLOOK_TOKEN_CACHE_JSON environment variable with your local token cache contents. Searched at: {cache_path}"
+            
+        try:
+            with open(cache_path, 'r') as f:
+                cache = json.load(f)
+        except Exception as e:
+            return None, f"Error parsing physical MSAL cache: {str(e)}"
+            
+    try:
         # 1. Search for a valid, non-expired Access Token in cache
         access_tokens = cache.get('AccessToken', {})
         now_epoch = int(time.time())
