@@ -261,7 +261,7 @@ def get_outlook_calendar():
     future_epoch = time.time() + (7 * 24 * 3600)  # 7 days future
     end_str = requests.utils.quote(time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(future_epoch)))
     
-    url = f"https://graph.microsoftonline.com/v1.0/me/calendarView?startDateTime={now_str}&endDateTime={end_str}&$select=subject,start,end,location,organizer&$orderby=start/dateTime&$top=10"
+    url = f"https://graph.microsoft.com/v1.0/me/calendarView?startDateTime={now_str}&endDateTime={end_str}&$select=subject,start,end,location,organizer&$orderby=start/dateTime&$top=10"
     
     try:
         resp = requests.get(url, headers=headers)
