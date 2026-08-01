@@ -182,17 +182,21 @@ def get_monday_projects():
         "Content-Type": "application/json"
     }
     
-    # GraphQL query targeting Sales Owner (person), Status (status), Due Date (date4), and Flag (color_mkvmrn92)
+    # GraphQL query targeting specific groups and key column values
     query = """
     query {
       boards(ids: [%s]) {
-        items_page(limit: 30) {
-          items {
-            id
-            name
-            column_values(ids: ["person", "color_mkvmrn92", "date4", "status"]) {
+        groups(ids: ["topics", "group_title", "group_mktk1nc2"]) {
+          id
+          title
+          items_page(limit: 30) {
+            items {
               id
-              text
+              name
+              column_values(ids: ["person", "color_mkvmrn92", "date4", "status"]) {
+                id
+                text
+              }
             }
           }
         }
@@ -209,36 +213,46 @@ def get_monday_projects():
                 
             boards = data.get('data', {}).get('boards', [])
             if not boards:
-                return jsonify({'projects': []})
+                return jsonify({'groups': []})
                 
-            items = boards[0].get('items_page', {}).get('items', [])
-            formatted_projects = []
+            groups = boards[0].get('groups', [])
+            formatted_groups = []
             
-            for item in items:
-                proj = {
-                    'id': item.get('id'),
-                    'name': item.get('name'),
-                    'sales_owner': 'N/A',
-                    'flag': 'N/A',
-                    'due_date': 'N/A',
-                    'status': 'N/A'
+            for g in groups:
+                group_data = {
+                    'id': g.get('id'),
+                    'title': g.get('title'),
+                    'projects': []
                 }
                 
-                for cv in item.get('column_values', []):
-                    col_id = cv.get('id')
-                    text_val = cv.get('text') or 'N/A'
-                    if col_id == 'person':
-                        proj['sales_owner'] = text_val
-                    elif col_id == 'color_mkvmrn92':
-                        proj['flag'] = text_val
-                    elif col_id == 'date4':
-                        proj['due_date'] = text_val
-                    elif col_id == 'status':
-                        proj['status'] = text_val
-                        
-                formatted_projects.append(proj)
+                items = g.get('items_page', {}).get('items', [])
+                for item in items:
+                    proj = {
+                        'id': item.get('id'),
+                        'name': item.get('name'),
+                        'sales_owner': 'N/A',
+                        'flag': 'N/A',
+                        'due_date': 'N/A',
+                        'status': 'N/A'
+                    }
+                    
+                    for cv in item.get('column_values', []):
+                        col_id = cv.get('id')
+                        text_val = cv.get('text') or 'N/A'
+                        if col_id == 'person':
+                            proj['sales_owner'] = text_val
+                        elif col_id == 'color_mkvmrn92':
+                            proj['flag'] = text_val
+                        elif col_id == 'date4':
+                            proj['due_date'] = text_val
+                        elif col_id == 'status':
+                            proj['status'] = text_val
+                            
+                    group_data['projects'].append(proj)
                 
-            return jsonify({'projects': formatted_projects})
+                formatted_groups.append(group_data)
+                
+            return jsonify({'groups': formatted_groups})
         else:
             return jsonify({'error': f"Monday.com returned HTTP {resp.status_code}"}), resp.status_code
     except Exception as e:

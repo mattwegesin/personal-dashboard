@@ -726,62 +726,93 @@
                 const res = await fetch('/api/monday-projects');
                 if (res.ok) {
                     const data = await res.json();
-                    const projects = data.projects || [];
+                    const groups = data.groups || [];
                     
-                    if (projects.length === 0) {
+                    if (groups.length === 0) {
                         container.innerHTML = `
                             <div class="empty-state">
                                 <i class="fa-solid fa-folder-open"></i>
-                                <span>No active Monday.com projects found.</span>
+                                <span>No active Monday.com groups found.</span>
                             </div>
                         `;
                         return;
                     }
                     
-                    let html = `
-                        <div class="monday-table-container">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Project Name</th>
-                                        <th>Sales Owner</th>
-                                        <th>Flag</th>
-                                        <th>Due Date</th>
-                                        <th>Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                    `;
+                    let html = '';
                     
-                    projects.forEach(p => {
-                        let statusClass = 'badge-status-default';
-                        const statusLower = p.status.toLowerCase();
-                        if (statusLower.includes('done') || statusLower.includes('complete')) {
-                            statusClass = 'badge-status-done';
-                        } else if (statusLower.includes('working') || statusLower.includes('progress') || statusLower.includes('it')) {
-                            statusClass = 'badge-status-working';
-                        } else if (statusLower.includes('stuck') || statusLower.includes('block')) {
-                            statusClass = 'badge-status-stuck';
-                        }
-                        
-                        let flagBadge = p.flag !== 'N/A' && p.flag !== '' ? `<span class="badge flag-badge">${p.flag}</span>` : '<span style="color: var(--text-secondary);">N/A</span>';
+                    groups.forEach((g, gIdx) => {
+                        const projects = g.projects || [];
+                        const borderTop = gIdx > 0 ? 'border-top: 1px solid var(--card-border);' : '';
                         
                         html += `
-                            <tr>
-                                <td class="project-name">${p.name}</td>
-                                <td>${p.sales_owner}</td>
-                                <td>${flagBadge}</td>
-                                <td style="font-family: monospace;">${p.due_date}</td>
-                                <td><span class="badge ${statusClass}">${p.status}</span></td>
-                            </tr>
+                            <div class="group-section" style="${borderTop}">
+                                <div class="group-header" style="padding: 16px 24px; background: rgba(255, 255, 255, 0.02); border-bottom: 1px solid var(--card-border); font-weight: 700; color: var(--accent); font-size: 15px; display: flex; align-items: center; justify-content: space-between;">
+                                    <span style="display: flex; align-items: center; gap: 8px;">
+                                        <i class="fa-solid fa-folder-open" style="color: #7854ff;"></i>
+                                        ${g.title}
+                                    </span>
+                                    <span style="background: rgba(120, 84, 255, 0.15); color: #9a80ff; font-size: 12px; font-weight: 600; padding: 2px 10px; border-radius: 12px;">
+                                        ${projects.length} ${projects.length === 1 ? 'item' : 'items'}
+                                    </span>
+                                </div>
+                        `;
+                        
+                        if (projects.length === 0) {
+                            html += `
+                                <div style="padding: 24px; text-align: center; color: var(--text-secondary); font-size: 13px;">
+                                    <i class="fa-solid fa-circle-info" style="margin-right: 6px; opacity: 0.5;"></i> No active projects in this stage.
+                                </div>
+                            </div>
+                            `;
+                            return;
+                        }
+                        
+                        html += `
+                            <div class="monday-table-container">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Project Name</th>
+                                            <th>Sales Owner</th>
+                                            <th>Flag</th>
+                                            <th>Due Date</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                        `;
+                        
+                        projects.forEach(p => {
+                            let statusClass = 'badge-status-default';
+                            const statusLower = p.status.toLowerCase();
+                            if (statusLower.includes('done') || statusLower.includes('complete')) {
+                                statusClass = 'badge-status-done';
+                            } else if (statusLower.includes('working') || statusLower.includes('progress') || statusLower.includes('it')) {
+                                statusClass = 'badge-status-working';
+                            } else if (statusLower.includes('stuck') || statusLower.includes('block')) {
+                                statusClass = 'badge-status-stuck';
+                            }
+                            
+                            let flagBadge = p.flag !== 'N/A' && p.flag !== '' ? `<span class="badge flag-badge">${p.flag}</span>` : '<span style="color: var(--text-secondary);">N/A</span>';
+                            
+                            html += `
+                                <tr>
+                                    <td class="project-name">${p.name}</td>
+                                    <td>${p.sales_owner}</td>
+                                    <td>${flagBadge}</td>
+                                    <td style="font-family: monospace;">${p.due_date}</td>
+                                    <td><span class="badge ${statusClass}">${p.status}</span></td>
+                                </tr>
+                            `;
+                        });
+                        
+                        html += `
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                         `;
                     });
-                    
-                    html += `
-                                </tbody>
-                            </table>
-                        </div>
-                    `;
                     
                     container.innerHTML = html;
                 } else {
