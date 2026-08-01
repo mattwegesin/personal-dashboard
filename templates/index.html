@@ -570,20 +570,18 @@
             
             <!-- Weather Widget -->
             <div class="card widget-weather">
-                <div class="weather-info">
-                    <div class="weather-city">
-                        <i class="fa-solid fa-location-dot"></i>
-                        <select id="weather-city-select" onchange="fetchWeather()">
-                            <option value="Atlanta" selected>Atlanta, GA</option>
-                            <option value="New York">New York, NY</option>
-                            <option value="Miami">Miami, FL</option>
-                            <option value="Chicago">Chicago, IL</option>
-                            <option value="Los Angeles">Los Angeles, CA</option>
-                            <option value="London">London, UK</option>
-                            <option value="Sydney">Sydney, AU</option>
-                        </select>
+                <div class="weather-info" style="width: 100%;">
+                    <div class="weather-city" style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; width: 100%;">
+                        <i class="fa-solid fa-location-dot" style="color: var(--accent);"></i>
+                        <input type="text" id="weather-city-input" value="Atlanta" 
+                               placeholder="Enter city..." 
+                               onkeypress="if(event.key === 'Enter') fetchWeather()"
+                               style="background: rgba(255, 255, 255, 0.05); border: 1px solid var(--card-border); color: var(--text-primary); font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: var(--radius-sm); outline: none; transition: var(--transition); flex: 1; max-width: 160px;">
+                        <button onclick="fetchWeather()" style="background: rgba(0, 198, 251, 0.15); border: none; color: var(--accent); padding: 8px 12px; border-radius: var(--radius-sm); cursor: pointer; transition: var(--transition); font-size: 12px; display: flex; align-items: center; justify-content: center;">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                        </button>
                     </div>
-                    <div class="weather-temp" id="weather-temp">--°F</div>
+                    <div class="weather-temp" id="weather-temp" style="margin-top: 4px;">--°F</div>
                     <div class="weather-desc" id="weather-desc">Fetching...</div>
                     <div class="weather-stats">
                         <span id="weather-humidity"><i class="fa-solid fa-droplet"></i> --%</span>
@@ -716,7 +714,9 @@
 
         // Fetch Weather
         async function fetchWeather() {
-            const city = document.getElementById('weather-city-select').value;
+            let city = document.getElementById('weather-city-input').value.trim();
+            if (!city) city = "Atlanta";
+            
             const tempEl = document.getElementById('weather-temp');
             const descEl = document.getElementById('weather-desc');
             const humEl = document.getElementById('weather-humidity');
@@ -724,7 +724,7 @@
             const iconEl = document.getElementById('weather-icon');
             
             try {
-                const res = await fetch(`/api/weather?city=${city}`);
+                const res = await fetch(`/api/weather?city=${encodeURIComponent(city)}`);
                 if (res.ok) {
                     const data = await res.json();
                     tempEl.textContent = `${data.temp_F}°F`;
