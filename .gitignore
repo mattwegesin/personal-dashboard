@@ -1,0 +1,17 @@
+# Python files
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+.env
+
+# Token Cache & Sensitive JSONs
+token_cache.json
+*.local
+
+# IDEs
+.vscode/
+.idea/
+.DS_Store

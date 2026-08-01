@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personal Dashboard</title>
+    <!-- Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --bg-primary: #0a0f1d;
+            --bg-secondary: #131c31;
+            --card-bg: rgba(25, 35, 58, 0.4);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --card-hover-border: rgba(0, 198, 251, 0.3);
+            
+            --text-primary: #ffffff;
+            --text-secondary: #8e9bb8;
+            --accent: #00c6fb;
+            --accent-glow: rgba(0, 198, 251, 0.15);
+            
+            --success: #00e676;
+            --warning: #ffb300;
+            --danger: #ff1744;
+            --info: #00b0ff;
+            
+            --radius-lg: 16px;
+            --radius-md: 10px;
+            --radius-sm: 6px;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(0, 198, 251, 0.05) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(0, 230, 118, 0.03) 0%, transparent 45%);
+        }
+
+        /* App Layout */
+        header {
+            padding: 24px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--card-border);
+            backdrop-filter: blur(10px);
+            background: rgba(10, 15, 29, 0.7);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header-title i {
+            font-size: 28px;
+            color: var(--accent);
+            text-shadow: 0 0 10px var(--accent-glow);
+        }
+
+        .header-title h1 {
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .btn-sync {
+            background: linear-gradient(135deg, #00c6fb 0%, #005bea 100%);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: var(--radius-md);
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 15px rgba(0, 198, 251, 0.3);
+            transition: var(--transition);
+        }
+
+        .btn-sync:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 198, 251, 0.45);
+        }
+
+        .btn-sync:active {
+            transform: translateY(0);
+        }
+
+        .btn-sync i.spinning {
+            animation: spin 1s linear infinite;
+        }
+
+        /* Dashboard Grid */
+        main {
+            flex: 1;
+            padding: 40px;
+            max-width: 1600px;
+            width: 100%;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 32px;
+        }
+
+        /* Widgets Banner */
+        .widget-banner {
+            grid-column: 1 / -1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 32px;
+        }
+
+        /* Widget Styles */
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            backdrop-filter: blur(12px);
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: transparent;
+            transition: var(--transition);
+        }
+
+        .card:hover {
+            border-color: var(--card-hover-border);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Time & Date Widget */
+        .widget-time {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .widget-time::before {
+            background: linear-gradient(90deg, var(--accent), #005bea);
+        }
+
+        .time-display {
+            font-size: 48px;
+            font-weight: 700;
+            letter-spacing: -1px;
+            color: var(--text-primary);
+        }
+
+        .date-display {
+            font-size: 16px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+            font-weight: 500;
+        }
+
+        .greeting-display {
+            font-size: 18px;
+            color: var(--accent);
+            margin-top: 12px;
+            font-weight: 600;
+        }
+
+        /* Weather Widget */
+        .widget-weather {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .widget-weather::before {
+            background: linear-gradient(90deg, #ffb300, #ff6f00);
+        }
+
+        .weather-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .weather-city {
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-secondary);
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .weather-city select {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-weight: 700;
+            font-size: 14px;
+            cursor: pointer;
+            outline: none;
+        }
+
+        .weather-city select option {
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+        }
+
+        .weather-temp {
+            font-size: 40px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin: 4px 0;
+        }
+
+        .weather-desc {
+            font-size: 16px;
+            color: var(--text-secondary);
+            font-weight: 500;
+            text-transform: capitalize;
+        }
+
+        .weather-stats {
+            display: flex;
+            gap: 16px;
+            margin-top: 8px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .weather-stats span i {
+            color: var(--accent);
+            margin-right: 4px;
+        }
+
+        .weather-icon-container {
+            font-size: 56px;
+            color: var(--warning);
+            text-shadow: 0 0 20px rgba(255, 179, 0, 0.3);
+        }
+
+        /* Monday.com Projects Widget */
+        .monday-section {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-title i {
+            color: #7854ff; /* Monday.com purple */
+        }
+
+        .monday-table-container {
+            width: 100%;
+            overflow-x: auto;
+            border-radius: var(--radius-md);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        th {
+            background-color: rgba(255, 255, 255, 0.03);
+            padding: 16px;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            font-weight: 600;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        td {
+            padding: 16px;
+            font-size: 14px;
+            border-bottom: 1px solid var(--card-border);
+            color: var(--text-primary);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr {
+            transition: var(--transition);
+        }
+
+        tr:hover td {
+            background-color: rgba(255, 255, 255, 0.015);
+        }
+
+        .project-name {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: capitalize;
+        }
+
+        .badge-status-done {
+            background-color: rgba(0, 230, 118, 0.15);
+            color: var(--success);
+        }
+
+        .badge-status-working {
+            background-color: rgba(255, 179, 0, 0.15);
+            color: var(--warning);
+        }
+
+        .badge-status-stuck {
+            background-color: rgba(255, 23, 68, 0.15);
+            color: var(--danger);
+        }
+
+        .badge-status-default {
+            background-color: rgba(255, 255, 255, 0.08);
+            color: var(--text-secondary);
+        }
+
+        .flag-badge {
+            background-color: rgba(0, 198, 251, 0.1);
+            color: var(--accent);
+            border: 1px solid rgba(0, 198, 251, 0.2);
+        }
+
+        /* Calendar Widget */
+        .calendar-section {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .calendar-section .section-title i {
+            color: #2b579a; /* Outlook blue */
+        }
+
+        .event-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .event-card {
+            background-color: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            transition: var(--transition);
+        }
+
+        .event-card:hover {
+            transform: translateX(4px);
+            border-color: rgba(0, 87, 234, 0.3);
+            background-color: rgba(255, 255, 255, 0.04);
+        }
+
+        .event-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 8px;
+        }
+
+        .event-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .event-time {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .event-details {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .event-details span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .event-details span i {
+            width: 14px;
+            text-align: center;
+        }
+
+        /* State views */
+        .loading-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: var(--text-secondary);
+            gap: 12px;
+        }
+
+        .loading-state i {
+            font-size: 24px;
+            color: var(--accent);
+            animation: spin 1s linear infinite;
+        }
+
+        .error-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: var(--text-secondary);
+            text-align: center;
+            gap: 12px;
+        }
+
+        .error-state i {
+            font-size: 32px;
+            color: var(--danger);
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: var(--text-secondary);
+            text-align: center;
+            gap: 12px;
+        }
+
+        .empty-state i {
+            font-size: 32px;
+            color: var(--text-secondary);
+            opacity: 0.5;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 1100px) {
+            main {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            header {
+                padding: 16px 20px;
+                flex-direction: column;
+                gap: 16px;
+                align-items: stretch;
+            }
+            .header-controls {
+                justify-content: space-between;
+            }
+            main {
+                padding: 20px;
+                gap: 20px;
+            }
+            .widget-banner {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-title">
+            <i class="fa-solid fa-gauge-high"></i>
+            <h1>Personal Dashboard</h1>
+        </div>
+        <div class="header-controls">
+            <button class="btn-sync" onclick="refreshAllData()">
+                <i id="sync-icon" class="fa-solid fa-arrows-rotate"></i>
+                Sync Dashboard
+            </button>
+        </div>
+    </header>
+
+    <main>
+        <!-- Time, Date & Weather Banner -->
+        <div class="widget-banner">
+            <!-- Time Widget -->
+            <div class="card widget-time">
+                <div class="time-display" id="clock">00:00:00</div>
+                <div class="date-display" id="date">Loading Date...</div>
+                <div class="greeting-display" id="greeting">Welcome Back</div>
+            </div>
+            
+            <!-- Weather Widget -->
+            <div class="card widget-weather">
+                <div class="weather-info">
+                    <div class="weather-city">
+                        <i class="fa-solid fa-location-dot"></i>
+                        <select id="weather-city-select" onchange="fetchWeather()">
+                            <option value="Atlanta" selected>Atlanta, GA</option>
+                            <option value="New York">New York, NY</option>
+                            <option value="Miami">Miami, FL</option>
+                            <option value="Chicago">Chicago, IL</option>
+                            <option value="Los Angeles">Los Angeles, CA</option>
+                            <option value="London">London, UK</option>
+                            <option value="Sydney">Sydney, AU</option>
+                        </select>
+                    </div>
+                    <div class="weather-temp" id="weather-temp">--°F</div>
+                    <div class="weather-desc" id="weather-desc">Fetching...</div>
+                    <div class="weather-stats">
+                        <span id="weather-humidity"><i class="fa-solid fa-droplet"></i> --%</span>
+                        <span id="weather-wind"><i class="fa-solid fa-wind"></i> -- km/h</span>
+                    </div>
+                </div>
+                <div class="weather-icon-container" id="weather-icon">
+                    <i class="fa-solid fa-cloud-sun"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Left Column: Monday.com Projects -->
+        <div class="monday-section">
+            <div class="section-header">
+                <h2 class="section-title">
+                    <i class="fa-solid fa-list-check"></i>
+                    Monday.com Projects (Board 9609739665)
+                </h2>
+            </div>
+            
+            <div class="card" style="padding: 0;">
+                <div id="monday-container">
+                    <!-- Loaded dynamically -->
+                    <div class="loading-state">
+                        <i class="fa-solid fa-arrows-rotate"></i>
+                        <span>Fetching active projects...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Outlook Calendar -->
+        <div class="calendar-section">
+            <div class="section-header">
+                <h2 class="section-title">
+                    <i class="fa-regular fa-calendar-days"></i>
+                    Upcoming Meetings
+                </h2>
+            </div>
+            
+            <div class="card">
+                <div id="calendar-container">
+                    <!-- Loaded dynamically -->
+                    <div class="loading-state">
+                        <i class="fa-solid fa-arrows-rotate"></i>
+                        <span>Loading Outlook calendar...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Update Live Clock & Date
+        function updateClock() {
+            const now = new Date();
+            
+            // Format Time
+            let hours = now.getHours();
+            let minutes = now.getMinutes();
+            let seconds = now.getSeconds();
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12;
+            hours = hours ? hours : 12; // the hour '0' should be '12'
+            minutes = minutes < 10 ? '0'+minutes : minutes;
+            seconds = seconds < 10 ? '0'+seconds : seconds;
+            
+            document.getElementById('clock').textContent = `${hours}:${minutes}:${seconds} ${ampm}`;
+            
+            // Format Date
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            document.getElementById('date').textContent = now.toLocaleDateString('en-US', options);
+            
+            // Set Greeting
+            let greeting = 'Welcome Back';
+            if (now.getHours() < 12) {
+                greeting = 'Good Morning, Matt';
+            } else if (now.getHours() < 18) {
+                greeting = 'Good Afternoon, Matt';
+            } else {
+                greeting = 'Good Evening, Matt';
+            }
+            document.getElementById('greeting').textContent = greeting;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // Helper: Map Weather Description to FontAwesome Icons
+        function getWeatherIcon(desc) {
+            const d = desc.toLowerCase();
+            if (d.includes('sunny') || d.includes('clear')) {
+                return '<i class="fa-solid fa-sun" style="color: #ffb300;"></i>';
+            } else if (d.includes('partly cloudy') || d.includes('cloudy') || d.includes('overcast')) {
+                return '<i class="fa-solid fa-cloud-sun" style="color: #8e9bb8;"></i>';
+            } else if (d.includes('rain') || d.includes('drizzle') || d.includes('shower')) {
+                return '<i class="fa-solid fa-cloud-showers-heavy" style="color: #00b0ff;"></i>';
+            } else if (d.includes('thunder') || d.includes('storm')) {
+                return '<i class="fa-solid fa-cloud-bolt" style="color: #ff1744;"></i>';
+            } else if (d.includes('snow') || d.includes('ice') || d.includes('flurry')) {
+                return '<i class="fa-solid fa-snowflake" style="color: #00e676;"></i>';
+            } else if (d.includes('fog') || d.includes('mist') || d.includes('haze')) {
+                return '<i class="fa-solid fa-smog" style="color: #8e9bb8;"></i>';
+            }
+            return '<i class="fa-solid fa-cloud"></i>';
+        }
+
+        // Fetch Weather
+        async function fetchWeather() {
+            const city = document.getElementById('weather-city-select').value;
+            const tempEl = document.getElementById('weather-temp');
+            const descEl = document.getElementById('weather-desc');
+            const humEl = document.getElementById('weather-humidity');
+            const windEl = document.getElementById('weather-wind');
+            const iconEl = document.getElementById('weather-icon');
+            
+            try {
+                const res = await fetch(`/api/weather?city=${city}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    tempEl.textContent = `${data.temp_F}°F`;
+                    descEl.textContent = data.desc;
+                    humEl.innerHTML = `<i class="fa-solid fa-droplet"></i> ${data.humidity}%`;
+                    windEl.innerHTML = `<i class="fa-solid fa-wind"></i> ${data.windspeed} km/h`;
+                    iconEl.innerHTML = getWeatherIcon(data.desc);
+                } else {
+                    descEl.textContent = "Error loading weather";
+                }
+            } catch (err) {
+                console.error("Weather error:", err);
+                descEl.textContent = "Offline";
+            }
+        }
+
+        // Fetch Monday.com Projects
+        async function fetchMondayProjects() {
+            const container = document.getElementById('monday-container');
+            
+            try {
+                const res = await fetch('/api/monday-projects');
+                if (res.ok) {
+                    const data = await res.json();
+                    const projects = data.projects || [];
+                    
+                    if (projects.length === 0) {
+                        container.innerHTML = `
+                            <div class="empty-state">
+                                <i class="fa-solid fa-folder-open"></i>
+                                <span>No active Monday.com projects found.</span>
+                            </div>
+                        `;
+                        return;
+                    }
+                    
+                    let html = `
+                        <div class="monday-table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Project Name</th>
+                                        <th>Sales Owner</th>
+                                        <th>Flag</th>
+                                        <th>Due Date</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                    `;
+                    
+                    projects.forEach(p => {
+                        let statusClass = 'badge-status-default';
+                        const statusLower = p.status.toLowerCase();
+                        if (statusLower.includes('done') || statusLower.includes('complete')) {
+                            statusClass = 'badge-status-done';
+                        } else if (statusLower.includes('working') || statusLower.includes('progress') || statusLower.includes('it')) {
+                            statusClass = 'badge-status-working';
+                        } else if (statusLower.includes('stuck') || statusLower.includes('block')) {
+                            statusClass = 'badge-status-stuck';
+                        }
+                        
+                        let flagBadge = p.flag !== 'N/A' && p.flag !== '' ? `<span class="badge flag-badge">${p.flag}</span>` : '<span style="color: var(--text-secondary);">N/A</span>';
+                        
+                        html += `
+                            <tr>
+                                <td class="project-name">${p.name}</td>
+                                <td>${p.sales_owner}</td>
+                                <td>${flagBadge}</td>
+                                <td style="font-family: monospace;">${p.due_date}</td>
+                                <td><span class="badge ${statusClass}">${p.status}</span></td>
+                            </tr>
+                        `;
+                    });
+                    
+                    html += `
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                    
+                    container.innerHTML = html;
+                } else {
+                    const data = await res.json().catch(() => ({}));
+                    const errMsg = data.error || "HTTP Error " + res.status;
+                    container.innerHTML = `
+                        <div class="error-state">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                            <span>Unable to fetch projects: ${errMsg}</span>
+                        </div>
+                    `;
+                }
+            } catch (err) {
+                container.innerHTML = `
+                    <div class="error-state">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <span>Network error: ${err.message}</span>
+                    </div>
+                `;
+            }
+        }
+
+        // Fetch Outlook Calendar
+        async function fetchOutlookCalendar() {
+            const container = document.getElementById('calendar-container');
+            
+            try {
+                const res = await fetch('/api/outlook-calendar');
+                if (res.ok) {
+                    const data = await res.json();
+                    const events = data.events || [];
+                    
+                    if (events.length === 0) {
+                        container.innerHTML = `
+                            <div class="empty-state">
+                                <i class="fa-regular fa-calendar"></i>
+                                <span>No upcoming meetings in the next 7 days.</span>
+                            </div>
+                        `;
+                        return;
+                    }
+                    
+                    let html = '<div class="event-list">';
+                    
+                    events.forEach(ev => {
+                        // Parse date
+                        const start = new Date(ev.start);
+                        const end = new Date(ev.end);
+                        
+                        // Beautiful relative day formatting
+                        const today = new Date();
+                        const tomorrow = new Date();
+                        tomorrow.setDate(today.getDate() + 1);
+                        
+                        let dayStr = "";
+                        if (start.toDateString() === today.toDateString()) {
+                            dayStr = "Today";
+                        } else if (start.toDateString() === tomorrow.toDateString()) {
+                            dayStr = "Tomorrow";
+                        } else {
+                            dayStr = start.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                        }
+                        
+                        const timeStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                        
+                        html += `
+                            <div class="event-card">
+                                <div class="event-header">
+                                    <div class="event-title">${ev.subject}</div>
+                                    <div class="event-time">
+                                        <i class="fa-regular fa-clock"></i>
+                                        <span>${dayStr} at ${timeStr}</span>
+                                    </div>
+                                </div>
+                                <div class="event-details">
+                                    <span><i class="fa-solid fa-location-dot"></i> ${ev.location}</span>
+                                    <span><i class="fa-regular fa-user"></i> Organized by ${ev.organizer}</span>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    html += '</div>';
+                    container.innerHTML = html;
+                } else {
+                    const data = await res.json().catch(() => ({}));
+                    const errMsg = data.error || "HTTP Error " + res.status;
+                    container.innerHTML = `
+                        <div class="error-state">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                            <span>Unable to sync calendar: ${errMsg}</span>
+                            <small style="display: block; margin-top: 8px; font-size: 11px; opacity: 0.7;">
+                                Note: Run authentication in the 'outlook-mcp' directory to log in.
+                            </small>
+                        </div>
+                    `;
+                }
+            } catch (err) {
+                container.innerHTML = `
+                    <div class="error-state">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <span>Network error: ${err.message}</span>
+                    </div>
+                `;
+            }
+        }
+
+        // Refresh all dashboard widgets
+        async function refreshAllData() {
+            const icon = document.getElementById('sync-icon');
+            icon.classList.add('spinning');
+            
+            // Parallel fetches
+            await Promise.all([
+                fetchWeather(),
+                fetchMondayProjects(),
+                fetchOutlookCalendar()
+            ]);
+            
+            // Leave a short delay to appreciate the animation
+            setTimeout(() => {
+                icon.classList.remove('spinning');
+            }, 600);
+        }
+
+        // Initial Load
+        window.onload = () => {
+            refreshAllData();
+        };
+    </script>
+</body>
+</html>
