@@ -308,8 +308,8 @@ def get_outlook_unread_emails():
         'Content-Type': 'application/json'
     }
     
-    # Query top 5 unread messages filtered by isRead eq false
-    url = "https://graph.microsoft.com/v1.0/me/messages?$filter=isRead eq false&$select=subject,from,receivedDateTime,bodyPreview&$orderby=receivedDateTime DESC&$top=5"
+    # Query top 5 unread messages filtered by isRead eq false inside the Inbox folder for optimal speed and reliability
+    url = "https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$filter=isRead eq false&$select=subject,from,receivedDateTime,bodyPreview&$orderby=receivedDateTime DESC&$top=5"
     
     try:
         resp = requests.get(url, headers=headers)
