@@ -616,21 +616,44 @@
             </div>
         </div>
 
-        <!-- Right Column: Outlook Calendar -->
-        <div class="calendar-section">
-            <div class="section-header">
-                <h2 class="section-title">
-                    <i class="fa-regular fa-calendar-days"></i>
-                    Upcoming Meetings
-                </h2>
+        <!-- Right Column: Sidebar (Calendar & Emails) -->
+        <div class="sidebar-section" style="display: flex; flex-direction: column; gap: 32px;">
+            <!-- Outlook Calendar -->
+            <div class="calendar-section">
+                <div class="section-header">
+                    <h2 class="section-title">
+                        <i class="fa-regular fa-calendar-days"></i>
+                        Upcoming Meetings
+                    </h2>
+                </div>
+                
+                <div class="card">
+                    <div id="calendar-container">
+                        <!-- Loaded dynamically -->
+                        <div class="loading-state">
+                            <i class="fa-solid fa-arrows-rotate"></i>
+                            <span>Loading Outlook calendar...</span>
+                        </div>
+                    </div>
+                </div>
             </div>
-            
-            <div class="card">
-                <div id="calendar-container">
-                    <!-- Loaded dynamically -->
-                    <div class="loading-state">
-                        <i class="fa-solid fa-arrows-rotate"></i>
-                        <span>Loading Outlook calendar...</span>
+
+            <!-- Outlook Unread Emails -->
+            <div class="email-section">
+                <div class="section-header" style="margin-bottom: 20px;">
+                    <h2 class="section-title">
+                        <i class="fa-regular fa-envelope" style="color: #ea3e2b;"></i>
+                        Unread Emails
+                    </h2>
+                </div>
+                
+                <div class="card" style="padding: 24px;">
+                    <div id="email-container">
+                        <!-- Loaded dynamically -->
+                        <div class="loading-state">
+                            <i class="fa-solid fa-arrows-rotate"></i>
+                            <span>Loading unread emails...</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -920,6 +943,78 @@
             }
         }
 
+        // Fetch Outlook Unread Emails
+        async function fetchUnreadEmails() {
+            const container = document.getElementById('email-container');
+            
+            try {
+                const res = await fetch('/api/outlook-unread-emails');
+                if (res.ok) {
+                    const data = await res.json();
+                    const emails = data.emails || [];
+                    
+                    if (emails.length === 0) {
+                        container.innerHTML = `
+                            <div class="empty-state">
+                                <i class="fa-regular fa-envelope-open" style="font-size: 32px; opacity: 0.5;"></i>
+                                <span>No unread emails in your inbox!</span>
+                            </div>
+                        `;
+                        return;
+                    }
+                    
+                    let html = '<div class="event-list">';
+                    
+                    emails.forEach(email => {
+                        // Parse date
+                        const receivedDate = new Date(email.received);
+                        const timeStr = receivedDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                        const dateStr = receivedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                        
+                        // Limit preview length
+                        const preview = email.preview.length > 100 ? email.preview.substring(0, 100) + '...' : email.preview;
+                        
+                        html += `
+                            <div class="event-card" style="border-left: 3px solid #ea3e2b;">
+                                <div class="event-header">
+                                    <div class="event-title" style="font-weight: 700; color: var(--text-primary); font-size: 14px;">${email.subject}</div>
+                                    <div class="event-time" style="color: var(--text-secondary); font-size: 11px; white-space: nowrap;">
+                                        ${dateStr} at ${timeStr}
+                                    </div>
+                                </div>
+                                <div style="font-size: 13px; color: var(--accent); font-weight: 600; margin-top: 4px; display: flex; align-items: center; gap: 6px;">
+                                    <i class="fa-regular fa-user" style="font-size: 11px;"></i>
+                                    <span>${email.sender}</span>
+                                </div>
+                                <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.4; margin-top: 8px; font-style: italic; opacity: 0.95;">
+                                    "${preview}"
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    html += '</div>';
+                    container.innerHTML = html;
+                } else {
+                    const data = await res.json().catch(() => ({}));
+                    const errMsg = data.error || "HTTP Error " + res.status;
+                    container.innerHTML = `
+                        <div class="error-state">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                            <span>Unable to sync emails: ${errMsg}</span>
+                        </div>
+                    `;
+                }
+            } catch (err) {
+                container.innerHTML = `
+                    <div class="error-state">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <span>Network error: ${err.message}</span>
+                    </div>
+                `;
+            }
+        }
+
         // Refresh all dashboard widgets
         async function refreshAllData() {
             const icon = document.getElementById('sync-icon');
@@ -929,7 +1024,8 @@
             await Promise.all([
                 fetchWeather(),
                 fetchMondayProjects(),
-                fetchOutlookCalendar()
+                fetchOutlookCalendar(),
+                fetchUnreadEmails()
             ]);
             
             // Leave a short delay to appreciate the animation

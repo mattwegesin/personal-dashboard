@@ -296,6 +296,40 @@ def get_outlook_calendar():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# API Route: Fetch Outlook Unread Emails
+@app.route('/api/outlook-unread-emails')
+def get_outlook_unread_emails():
+    token, err = get_outlook_token()
+    if err:
+        return jsonify({'error': err}), 400
+        
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'Content-Type': 'application/json'
+    }
+    
+    # Query top 5 unread messages filtered by isRead eq false
+    url = "https://graph.microsoft.com/v1.0/me/messages?$filter=isRead eq false&$select=subject,from,receivedDateTime,bodyPreview&$orderby=receivedDateTime DESC&$top=5"
+    
+    try:
+        resp = requests.get(url, headers=headers)
+        if resp.status_code == 200:
+            messages = resp.json().get('value', [])
+            formatted_emails = []
+            for msg in messages:
+                formatted_emails.append({
+                    'subject': msg.get('subject', 'No Subject'),
+                    'sender': msg.get('from', {}).get('emailAddress', {}).get('name', 'Unknown'),
+                    'sender_email': msg.get('from', {}).get('emailAddress', {}).get('address', ''),
+                    'received': msg.get('receivedDateTime'),
+                    'preview': msg.get('bodyPreview', '')
+                })
+            return jsonify({'emails': formatted_emails})
+        else:
+            return jsonify({'error': f"Graph API returned HTTP {resp.status_code} - {resp.text}"}), resp.status_code
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 # API Route: Fetch Weather via zero-config wttr.in JSON
 @app.route('/api/weather')
 def get_weather():
