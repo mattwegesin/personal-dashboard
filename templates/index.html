@@ -1389,7 +1389,7 @@
         
         async function markAsReadyOnMonday(propertyCode) {
             try {
-                const res = await fetch(`/api/mark-ready/${propertyCode}`, { method: 'POST' });
+                const res = await fetch(`/api/mark-ready/${encodeURIComponent(propertyCode)}`, { method: 'POST' });
                 const data = await res.json();
                 if (res.ok && data.success) {
                     alert(`Success: ${data.message}`);
@@ -1418,13 +1418,14 @@
             spinnerTitle.textContent = "Auditing SharePoint Folder...";
             
             document.querySelectorAll('.modal-tab').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
             document.querySelector('[onclick*="tab-sow"]').classList.add('active');
             document.getElementById('tab-sow').classList.add('active');
             document.getElementById('tab-diagram').classList.remove('active');
             document.querySelector('[onclick*="tab-diagram"]').style.display = 'none';
             
             try {
-                const url = `/api/check-readiness/${propertyCode}`;
+                const url = `/api/check-readiness/${encodeURIComponent(propertyCode)}`;
                 const res = await fetch(url);
                 const data = await res.json();
                 
@@ -1483,12 +1484,13 @@
             spinnerTitle.textContent = "Running Wi-Fi Design Engine...";
             
             document.querySelectorAll('.modal-tab').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
             document.querySelector('[onclick*="tab-sow"]').classList.add('active');
             document.getElementById('tab-sow').classList.add('active');
             document.getElementById('tab-diagram').classList.remove('active');
             
             try {
-                const url = `/api/generate-design/${propertyCode}?brand=${encodeURIComponent(brand)}`;
+                const url = `/api/generate-design/${encodeURIComponent(propertyCode)}?brand=${encodeURIComponent(brand)}`;
                 const res = await fetch(url);
                 const data = await res.json();
                 
