@@ -761,11 +761,49 @@
                         return;
                     }
                     
-                    let html = '';
+                    // Calculate pipeline summary stats
+                    let readyCount = 0;
+                    let missingCount = 0;
+                    let notStartedCount = 0;
+                    
+                    groups.forEach(g => {
+                        (g.projects || []).forEach(p => {
+                            if (p.readiness === 'READY') readyCount++;
+                            else if (p.readiness === 'MISSING INFO') missingCount++;
+                            else if (p.readiness === 'NOT STARTED') notStartedCount++;
+                        });
+                    });
+                    
+                    // Header Pipeline summary bar
+                    let html = `
+                        <div class="pipeline-summary-bar" style="display: flex; justify-content: space-around; align-items: center; padding: 20px 24px; background: rgba(255, 255, 255, 0.015); border-bottom: 1px solid var(--card-border); gap: 16px; flex-wrap: wrap;">
+                            <div class="pipeline-stat-card" style="display: flex; align-items: center; gap: 12px; background: rgba(0, 230, 118, 0.04); border: 1px solid rgba(0, 230, 118, 0.12); padding: 10px 20px; border-radius: var(--radius-md); flex: 1; min-width: 150px; justify-content: center;">
+                                <i class="fa-solid fa-circle-check" style="color: var(--success); font-size: 18px; text-shadow: 0 0 10px rgba(0, 230, 118, 0.2);"></i>
+                                <div style="display: flex; flex-direction: column;">
+                                    <span style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); font-weight: 600;">Survey Ready</span>
+                                    <span style="font-size: 18px; font-weight: 700; color: #ffffff;">${readyCount} <span style="font-size: 12px; font-weight: 500; color: var(--text-secondary);">projects</span></span>
+                                </div>
+                            </div>
+                            <div class="pipeline-stat-card" style="display: flex; align-items: center; gap: 12px; background: rgba(255, 179, 0, 0.04); border: 1px solid rgba(255, 179, 0, 0.12); padding: 10px 20px; border-radius: var(--radius-md); flex: 1; min-width: 150px; justify-content: center;">
+                                <i class="fa-solid fa-circle-exclamation" style="color: var(--warning); font-size: 18px; text-shadow: 0 0 10px rgba(255, 179, 0, 0.2);"></i>
+                                <div style="display: flex; flex-direction: column;">
+                                    <span style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); font-weight: 600;">Missing Info</span>
+                                    <span style="font-size: 18px; font-weight: 700; color: #ffffff;">${missingCount} <span style="font-size: 12px; font-weight: 500; color: var(--text-secondary);">projects</span></span>
+                                </div>
+                            </div>
+                            <div class="pipeline-stat-card" style="display: flex; align-items: center; gap: 12px; background: rgba(255, 23, 68, 0.04); border: 1px solid rgba(255, 23, 68, 0.12); padding: 10px 20px; border-radius: var(--radius-md); flex: 1; min-width: 150px; justify-content: center;">
+                                <i class="fa-regular fa-circle" style="color: var(--danger); font-size: 18px; text-shadow: 0 0 10px rgba(255, 23, 68, 0.2);"></i>
+                                <div style="display: flex; flex-direction: column;">
+                                    <span style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); font-weight: 600;">Not Started</span>
+                                    <span style="font-size: 18px; font-weight: 700; color: #ffffff;">${notStartedCount} <span style="font-size: 12px; font-weight: 500; color: var(--text-secondary);">projects</span></span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
                     
                     groups.forEach((g, gIdx) => {
                         const projects = g.projects || [];
-                        const borderTop = gIdx > 0 ? 'border-top: 1px solid var(--card-border);' : '';
+                        const borderTop = 'border-top: 1px solid var(--card-border);';
                         
                         html += `
                             <div class="group-section" style="${borderTop}">
@@ -798,6 +836,7 @@
                                             <th>Project Name</th>
                                             <th>Sales Owner</th>
                                             <th>Flag</th>
+                                            <th>Design Readiness</th>
                                             <th>Due Date</th>
                                             <th>Status</th>
                                         </tr>
@@ -818,11 +857,21 @@
                             
                             let flagBadge = p.flag !== 'N/A' && p.flag !== '' ? `<span class="badge flag-badge">${p.flag}</span>` : '<span style="color: var(--text-secondary);">N/A</span>';
                             
+                            let readinessBadge = '';
+                            if (p.readiness === 'READY') {
+                                readinessBadge = '<span class="badge" style="background-color: rgba(0, 230, 118, 0.12); color: var(--success); font-weight: 700; gap: 6px; display: inline-flex; align-items: center;"><i class="fa-solid fa-circle-check" style="font-size: 10px;"></i> Ready</span>';
+                            } else if (p.readiness === 'MISSING INFO') {
+                                readinessBadge = '<span class="badge" style="background-color: rgba(255, 179, 0, 0.12); color: var(--warning); font-weight: 700; gap: 6px; display: inline-flex; align-items: center;"><i class="fa-solid fa-circle-exclamation" style="font-size: 10px;"></i> Missing Info</span>';
+                            } else {
+                                readinessBadge = '<span class="badge" style="background-color: rgba(255, 23, 68, 0.12); color: var(--danger); font-weight: 700; gap: 6px; display: inline-flex; align-items: center;"><i class="fa-regular fa-circle" style="font-size: 10px;"></i> Not Started</span>';
+                            }
+                            
                             html += `
                                 <tr>
                                     <td class="project-name">${p.name}</td>
                                     <td>${p.sales_owner}</td>
                                     <td>${flagBadge}</td>
+                                    <td>${readinessBadge}</td>
                                     <td style="font-family: monospace;">${p.due_date}</td>
                                     <td><span class="badge ${statusClass}">${p.status}</span></td>
                                 </tr>

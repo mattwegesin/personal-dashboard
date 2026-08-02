@@ -182,7 +182,7 @@ def get_monday_projects():
         "Content-Type": "application/json"
     }
     
-    # GraphQL query targeting specific groups and key column values
+    # GraphQL query targeting specific groups, key column values, and subitems for design readiness
     query = """
     query {
       boards(ids: [%s]) {
@@ -196,6 +196,14 @@ def get_monday_projects():
               column_values(ids: ["person", "color_mkvmrn92", "date4", "status"]) {
                 id
                 text
+              }
+              subitems {
+                id
+                name
+                column_values(ids: ["status"]) {
+                  id
+                  text
+                }
               }
             }
           }
@@ -233,9 +241,11 @@ def get_monday_projects():
                         'sales_owner': 'N/A',
                         'flag': 'N/A',
                         'due_date': 'N/A',
-                        'status': 'N/A'
+                        'status': 'N/A',
+                        'readiness': 'NOT STARTED'  # Default red
                     }
                     
+                    # 1. Parse standard column values
                     for cv in item.get('column_values', []):
                         col_id = cv.get('id')
                         text_val = cv.get('text') or 'N/A'
@@ -247,6 +257,28 @@ def get_monday_projects():
                             proj['due_date'] = text_val
                         elif col_id == 'status':
                             proj['status'] = text_val
+                            
+                    # 2. Parse subitems to determine Wi-Fi design readiness status
+                    subitems = item.get('subitems', []) or []
+                    survey_subitem = None
+                    for s in subitems:
+                        if 'Review Site Survey Information' in s.get('name', ''):
+                            survey_subitem = s
+                            break
+                            
+                    if survey_subitem:
+                        status_val = 'Not Started'
+                        for cv in survey_subitem.get('column_values', []):
+                            if cv.get('id') == 'status':
+                                status_val = cv.get('text') or 'Not Started'
+                                break
+                                
+                        if status_val == 'Done':
+                            proj['readiness'] = 'READY'
+                        elif status_val in ['Working on it', 'Stuck']:
+                            proj['readiness'] = 'MISSING INFO'
+                        else:
+                            proj['readiness'] = 'NOT STARTED'
                             
                     group_data['projects'].append(proj)
                 
