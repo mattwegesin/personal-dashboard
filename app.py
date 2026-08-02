@@ -523,7 +523,7 @@ def generate_design(property_code):
         # Call Gemini API directly via Google GenAI SDK
         client = genai.Client(api_key=api_key)
         response = client.models.generate_content(
-            model='gemini-2.5-pro',  # Upgraded to pro for maximum quality and design compliance
+            model='gemini-3.1-pro-preview',  # Upgraded to pro for maximum quality and design compliance
             contents=prompt,
             config=types.GenerateContentConfig(
                 system_instruction=sys_instruction,
@@ -626,7 +626,7 @@ def check_readiness(property_code):
         # Call Gemini API directly via Google GenAI SDK
         client = genai.Client(api_key=api_key)
         response = client.models.generate_content(
-            model='gemini-2.5-pro',
+            model='gemini-3.1-pro-preview',
             contents=prompt,
             config=types.GenerateContentConfig(
                 system_instruction=READINESS_INSTRUCTION,
