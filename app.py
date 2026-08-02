@@ -258,27 +258,64 @@ def get_monday_projects():
                         elif col_id == 'status':
                             proj['status'] = text_val
                             
-                    # 2. Parse subitems to determine Wi-Fi design readiness status
+                    # 2. Parse subitems to evaluate the project's exact workflow stage and readiness
                     subitems = item.get('subitems', []) or []
-                    survey_subitem = None
+                    subitem_status = {}
                     for s in subitems:
-                        if 'Review Site Survey Information' in s.get('name', ''):
-                            survey_subitem = s
-                            break
-                            
-                    if survey_subitem:
+                        s_name = s.get('name', '').strip()
                         status_val = 'Not Started'
-                        for cv in survey_subitem.get('column_values', []):
+                        for cv in s.get('column_values', []) or []:
                             if cv.get('id') == 'status':
                                 status_val = cv.get('text') or 'Not Started'
                                 break
-                                
-                        if status_val == 'Done':
+                        subitem_status[s_name] = status_val
+                    
+                    # Evaluate based on the hierarchy of the engineering workflow
+                    # A. Submission Stage (Update Salesforce)
+                    salesforce_status = subitem_status.get('Update Salesforce') or subitem_status.get('Update SalesForce')
+                    if salesforce_status:
+                        if salesforce_status == 'Submitted for Approval':
+                            proj['readiness'] = 'SUBMITTED'
+                        elif salesforce_status == 'Done':
                             proj['readiness'] = 'READY'
-                        elif status_val in ['Working on it', 'Stuck']:
+                        elif salesforce_status in ['Working on it', 'Stuck', 'Waiting on Info']:
                             proj['readiness'] = 'MISSING INFO'
                         else:
                             proj['readiness'] = 'NOT STARTED'
+                    
+                    # B. Design/Quote Stage (Create design documents & quote)
+                    elif 'Create design documents' in subitem_status or 'Create quote' in subitem_status:
+                        docs_status = subitem_status.get('Create design documents', 'Not Started')
+                        quote_status = subitem_status.get('Create quote', 'Not Started')
+                        if docs_status == 'Done' or quote_status == 'Done':
+                            proj['readiness'] = 'READY'
+                        elif docs_status in ['Working on it', 'Waiting on Info', 'Stuck'] or quote_status in ['Working on it', 'Waiting on Info', 'Stuck']:
+                            proj['readiness'] = 'MISSING INFO'
+                        else:
+                            proj['readiness'] = 'NOT STARTED'
+                            
+                    # C. Review Stage (Review Site Survey or general review)
+                    elif 'Review Site Survey Information' in subitem_status or 'Review information provided' in subitem_status:
+                        survey_status = subitem_status.get('Review Site Survey Information', 'Not Started')
+                        info_status = subitem_status.get('Review information provided', 'Not Started')
+                        if survey_status == 'Done' or info_status == 'Done':
+                            proj['readiness'] = 'READY'
+                        elif survey_status in ['Working on it', 'Stuck', 'Waiting on Info'] or info_status in ['Working on it', 'Stuck', 'Waiting on Info']:
+                            proj['readiness'] = 'MISSING INFO'
+                        else:
+                            proj['readiness'] = 'NOT STARTED'
+                            
+                    # D. Pre-Design Stage
+                    elif 'Send for Pre-Design' in subitem_status:
+                        send_status = subitem_status.get('Send for Pre-Design', 'Not Started')
+                        if send_status == 'Done':
+                            proj['readiness'] = 'READY'
+                        elif send_status in ['Working on it', 'Stuck', 'Waiting on Info']:
+                            proj['readiness'] = 'MISSING INFO'
+                        else:
+                            proj['readiness'] = 'NOT STARTED'
+                    else:
+                        proj['readiness'] = 'NOT STARTED'
                             
                     group_data['projects'].append(proj)
                 

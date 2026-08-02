@@ -763,12 +763,14 @@
                     
                     // Calculate pipeline summary stats
                     let readyCount = 0;
+                    let submittedCount = 0;
                     let missingCount = 0;
                     let notStartedCount = 0;
                     
                     groups.forEach(g => {
                         (g.projects || []).forEach(p => {
                             if (p.readiness === 'READY') readyCount++;
+                            else if (p.readiness === 'SUBMITTED') submittedCount++;
                             else if (p.readiness === 'MISSING INFO') missingCount++;
                             else if (p.readiness === 'NOT STARTED') notStartedCount++;
                         });
@@ -776,26 +778,33 @@
                     
                     // Header Pipeline summary bar
                     let html = `
-                        <div class="pipeline-summary-bar" style="display: flex; justify-content: space-around; align-items: center; padding: 20px 24px; background: rgba(255, 255, 255, 0.015); border-bottom: 1px solid var(--card-border); gap: 16px; flex-wrap: wrap;">
-                            <div class="pipeline-stat-card" style="display: flex; align-items: center; gap: 12px; background: rgba(0, 230, 118, 0.04); border: 1px solid rgba(0, 230, 118, 0.12); padding: 10px 20px; border-radius: var(--radius-md); flex: 1; min-width: 150px; justify-content: center;">
-                                <i class="fa-solid fa-circle-check" style="color: var(--success); font-size: 18px; text-shadow: 0 0 10px rgba(0, 230, 118, 0.2);"></i>
+                        <div class="pipeline-summary-bar" style="display: flex; justify-content: space-around; align-items: center; padding: 20px 24px; background: rgba(255, 255, 255, 0.015); border-bottom: 1px solid var(--card-border); gap: 12px; flex-wrap: wrap;">
+                            <div class="pipeline-stat-card" style="display: flex; align-items: center; gap: 10px; background: rgba(0, 230, 118, 0.04); border: 1px solid rgba(0, 230, 118, 0.12); padding: 10px 16px; border-radius: var(--radius-md); flex: 1; min-width: 140px; justify-content: center;">
+                                <i class="fa-solid fa-circle-check" style="color: var(--success); font-size: 16px; text-shadow: 0 0 10px rgba(0, 230, 118, 0.2);"></i>
                                 <div style="display: flex; flex-direction: column;">
-                                    <span style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); font-weight: 600;">Survey Ready</span>
-                                    <span style="font-size: 18px; font-weight: 700; color: #ffffff;">${readyCount} <span style="font-size: 12px; font-weight: 500; color: var(--text-secondary);">projects</span></span>
+                                    <span style="font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); font-weight: 600;">Approved</span>
+                                    <span style="font-size: 16px; font-weight: 700; color: #ffffff;">${readyCount} <span style="font-size: 11px; font-weight: 500; color: var(--text-secondary);">docs</span></span>
                                 </div>
                             </div>
-                            <div class="pipeline-stat-card" style="display: flex; align-items: center; gap: 12px; background: rgba(255, 179, 0, 0.04); border: 1px solid rgba(255, 179, 0, 0.12); padding: 10px 20px; border-radius: var(--radius-md); flex: 1; min-width: 150px; justify-content: center;">
-                                <i class="fa-solid fa-circle-exclamation" style="color: var(--warning); font-size: 18px; text-shadow: 0 0 10px rgba(255, 179, 0, 0.2);"></i>
+                            <div class="pipeline-stat-card" style="display: flex; align-items: center; gap: 10px; background: rgba(0, 176, 255, 0.04); border: 1px solid rgba(0, 176, 255, 0.12); padding: 10px 16px; border-radius: var(--radius-md); flex: 1; min-width: 140px; justify-content: center;">
+                                <i class="fa-regular fa-paper-plane" style="color: var(--info); font-size: 16px; text-shadow: 0 0 10px rgba(0, 176, 255, 0.2);"></i>
                                 <div style="display: flex; flex-direction: column;">
-                                    <span style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); font-weight: 600;">Missing Info</span>
-                                    <span style="font-size: 18px; font-weight: 700; color: #ffffff;">${missingCount} <span style="font-size: 12px; font-weight: 500; color: var(--text-secondary);">projects</span></span>
+                                    <span style="font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); font-weight: 600;">Submitted</span>
+                                    <span style="font-size: 16px; font-weight: 700; color: #ffffff;">${submittedCount} <span style="font-size: 11px; font-weight: 500; color: var(--text-secondary);">docs</span></span>
                                 </div>
                             </div>
-                            <div class="pipeline-stat-card" style="display: flex; align-items: center; gap: 12px; background: rgba(255, 23, 68, 0.04); border: 1px solid rgba(255, 23, 68, 0.12); padding: 10px 20px; border-radius: var(--radius-md); flex: 1; min-width: 150px; justify-content: center;">
-                                <i class="fa-regular fa-circle" style="color: var(--danger); font-size: 18px; text-shadow: 0 0 10px rgba(255, 23, 68, 0.2);"></i>
+                            <div class="pipeline-stat-card" style="display: flex; align-items: center; gap: 10px; background: rgba(255, 179, 0, 0.04); border: 1px solid rgba(255, 179, 0, 0.12); padding: 10px 16px; border-radius: var(--radius-md); flex: 1; min-width: 140px; justify-content: center;">
+                                <i class="fa-solid fa-circle-exclamation" style="color: var(--warning); font-size: 16px; text-shadow: 0 0 10px rgba(255, 179, 0, 0.2);"></i>
                                 <div style="display: flex; flex-direction: column;">
-                                    <span style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); font-weight: 600;">Not Started</span>
-                                    <span style="font-size: 18px; font-weight: 700; color: #ffffff;">${notStartedCount} <span style="font-size: 12px; font-weight: 500; color: var(--text-secondary);">projects</span></span>
+                                    <span style="font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); font-weight: 600;">Missing Info</span>
+                                    <span style="font-size: 16px; font-weight: 700; color: #ffffff;">${missingCount} <span style="font-size: 11px; font-weight: 500; color: var(--text-secondary);">docs</span></span>
+                                </div>
+                            </div>
+                            <div class="pipeline-stat-card" style="display: flex; align-items: center; gap: 10px; background: rgba(255, 23, 68, 0.04); border: 1px solid rgba(255, 23, 68, 0.12); padding: 10px 16px; border-radius: var(--radius-md); flex: 1; min-width: 140px; justify-content: center;">
+                                <i class="fa-regular fa-circle" style="color: var(--danger); font-size: 16px; text-shadow: 0 0 10px rgba(255, 23, 68, 0.2);"></i>
+                                <div style="display: flex; flex-direction: column;">
+                                    <span style="font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); font-weight: 600;">Not Started</span>
+                                    <span style="font-size: 16px; font-weight: 700; color: #ffffff;">${notStartedCount} <span style="font-size: 11px; font-weight: 500; color: var(--text-secondary);">docs</span></span>
                                 </div>
                             </div>
                         </div>
@@ -859,7 +868,9 @@
                             
                             let readinessBadge = '';
                             if (p.readiness === 'READY') {
-                                readinessBadge = '<span class="badge" style="background-color: rgba(0, 230, 118, 0.12); color: var(--success); font-weight: 700; gap: 6px; display: inline-flex; align-items: center;"><i class="fa-solid fa-circle-check" style="font-size: 10px;"></i> Ready</span>';
+                                readinessBadge = '<span class="badge" style="background-color: rgba(0, 230, 118, 0.12); color: var(--success); font-weight: 700; gap: 6px; display: inline-flex; align-items: center;"><i class="fa-solid fa-circle-check" style="font-size: 10px;"></i> Approved</span>';
+                            } else if (p.readiness === 'SUBMITTED') {
+                                readinessBadge = '<span class="badge" style="background-color: rgba(0, 176, 255, 0.12); color: var(--info); font-weight: 700; gap: 6px; display: inline-flex; align-items: center;"><i class="fa-regular fa-paper-plane" style="font-size: 10px;"></i> Submitted</span>';
                             } else if (p.readiness === 'MISSING INFO') {
                                 readinessBadge = '<span class="badge" style="background-color: rgba(255, 179, 0, 0.12); color: var(--warning); font-weight: 700; gap: 6px; display: inline-flex; align-items: center;"><i class="fa-solid fa-circle-exclamation" style="font-size: 10px;"></i> Missing Info</span>';
                             } else {
