@@ -442,10 +442,10 @@ def generate_design(property_code):
     api_key = os.environ.get('GEMINI_API_KEY')
     if not api_key:
         # Sibling folder load check fallback
-        boldsign_env = find_workspace_file('.env', 'boldsign_web')
-        if os.path.exists(boldsign_env):
+        design_env = find_workspace_file('.env', 'network_design_web')
+        if os.path.exists(design_env):
             try:
-                with open(boldsign_env, 'r') as f:
+                with open(design_env, 'r') as f:
                     for line in f:
                         if 'GEMINI_API_KEY=' in line:
                             api_key = line.split('GEMINI_API_KEY=', 1)[1].strip().strip('"\'')
@@ -596,10 +596,10 @@ def generate_design(property_code):
 def check_readiness(property_code):
     api_key = os.environ.get('GEMINI_API_KEY')
     if not api_key:
-        boldsign_env = find_workspace_file('.env', 'boldsign_web')
-        if os.path.exists(boldsign_env):
+        design_env = find_workspace_file('.env', 'network_design_web')
+        if os.path.exists(design_env):
             try:
-                with open(boldsign_env, 'r') as f:
+                with open(design_env, 'r') as f:
                     for line in f:
                         if 'GEMINI_API_KEY=' in line:
                             api_key = line.split('GEMINI_API_KEY=', 1)[1].strip().strip('"\'')
