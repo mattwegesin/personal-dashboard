@@ -2,6 +2,7 @@ import os
 import json
 import time
 import requests
+import subprocess
 from flask import Flask, render_template, jsonify, request
 from dotenv import load_dotenv
 
@@ -396,6 +397,111 @@ def get_outlook_unread_emails():
             return jsonify({'emails': formatted_emails})
         else:
             return jsonify({'error': f"Graph API returned HTTP {resp.status_code} - {resp.text}"}), resp.status_code
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# API Route: Trigger Wi-Fi Design Engine using Gemini CLI
+@app.route('/api/generate-design/<property_code>')
+def generate_design(property_code):
+    brand = request.args.get('brand', 'IHG').upper()
+    
+    # Map brand name to standard reference standards
+    brand_file = 'design-criteria.md'
+    if 'IHG' in brand:
+        brand_file = 'ihg-meraki.md'
+    elif 'WESTERN' in brand or 'BW' in brand:
+        brand_file = 'best-western-aruba.md'
+    elif 'CHOICE' in brand:
+        brand_file = 'choice-aruba.md'
+    elif 'WYNDHAM' in brand:
+        brand_file = 'wyndham-aruba.md'
+    elif 'OMADA' in brand:
+        brand_file = 'independent-omada.md'
+        
+    # Build prompt for the Gemini CLI activating your custom skills
+    prompt = (
+        f"Activate the 'network-designer' skill. Create a complete, detailed Wi-Fi network design, "
+        f"Bill of Materials (BOM) in Markdown table format, a Statement of Work (SOW), and a Logical Network Diagram "
+        f"using Mermaid.js syntax for the property code '{property_code}'. Apply standard brand design parameters "
+        f"based on the reference file '{brand_file}'. Search SharePoint for files matching '{property_code}' "
+        f"to extract any room counts, wall materials, floorplans, and survey notes for the design."
+    )
+    
+    # Path for storing results
+    output_dir = os.path.join(os.path.dirname(__file__), 'static', 'designs')
+    os.makedirs(output_dir, exist_ok=True)
+    
+    md_file_path = os.path.join(output_dir, f"{property_code}_design_report.md")
+    excel_file_path = os.path.join(output_dir, f"{property_code}_BOM.xlsx")
+    
+    try:
+        # Run Gemini CLI in correct path environment
+        env = os.environ.copy()
+        env['PATH'] = f"/opt/homebrew/bin:/usr/local/bin:{env.get('PATH', '')}"
+        
+        cmd = ["gemini", "-p", prompt, "--approval-mode", "yolo"]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True, env=env)
+        
+        raw_markdown = result.stdout
+        if not raw_markdown:
+            return jsonify({'error': "Gemini CLI returned empty response"}), 500
+            
+        # Save raw report
+        with open(md_file_path, "w") as f:
+            f.write(raw_markdown)
+            
+        # Parse BOM table from markdown to generate Excel spreadsheet
+        bom_rows = []
+        is_table = False
+        headers = []
+        
+        for line in raw_markdown.split('\n'):
+            if '|' in line:
+                parts = [p.strip() for p in line.split('|')[1:-1]]
+                if not parts:
+                    continue
+                # Skip divider lines like |---|---|
+                if all(all(c == '-' or c == ' ' for c in p) for p in parts):
+                    continue
+                if not is_table:
+                    headers = parts
+                    is_table = True
+                else:
+                    # Pad row if columns don't match headers
+                    while len(parts) < len(headers):
+                        parts.append('')
+                    bom_rows.append(parts[:len(headers)])
+            else:
+                is_table = False
+                
+        # Generate Excel BOM if table was parsed
+        if bom_rows and headers:
+            try:
+                import pandas as pd
+                df = pd.DataFrame(bom_rows, columns=headers)
+                df.to_excel(excel_file_path, index=False)
+            except Exception as e:
+                print(f"Error generating Excel for {property_code}: {e}")
+                
+        # Extract Mermaid diagram block
+        mermaid_code = ""
+        if "```mermaid" in raw_markdown:
+            parts = raw_markdown.split("```mermaid", 1)
+            if len(parts) == 2:
+                mermaid_code = parts[1].split("```", 1)[0].strip()
+                
+        return jsonify({
+            'success': True,
+            'property_code': property_code,
+            'report_md': raw_markdown,
+            'mermaid_diagram': mermaid_code,
+            'md_download_url': f"/static/designs/{property_code}_design_report.md",
+            'excel_download_url': f"/static/designs/{property_code}_BOM.xlsx" if os.path.exists(excel_file_path) else None
+        })
+        
+    except subprocess.CalledProcessError as e:
+        err_msg = e.stderr or e.stdout or str(e)
+        return jsonify({'error': f"Gemini CLI execution failed: {err_msg}"}), 500
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
