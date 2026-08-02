@@ -505,6 +505,119 @@ def generate_design(property_code):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# API Route: Check SharePoint files for Design Readiness using Gemini CLI
+@app.route('/api/check-readiness/<property_code>')
+def check_readiness(property_code):
+    prompt = (
+        f"Activate the 'network-design-readiness' skill. Search SharePoint for files matching the property code '{property_code}'. "
+        f"Evaluate the discovered files for design readiness. List the files found and explain if they contain the floorplans, "
+        f"wall materials, scales, and room counts needed to generate a professional Wi-Fi network design. "
+        f"Conclude the report with a clear line: 'Overall Status: READY' if ready, or 'Overall Status: INCOMPLETE' if missing info."
+    )
+    
+    try:
+        # Run Gemini CLI in correct path environment
+        env = os.environ.copy()
+        env['PATH'] = f"/opt/homebrew/bin:/usr/local/bin:{env.get('PATH', '')}"
+        
+        cmd = ["gemini", "-p", prompt, "--approval-mode", "yolo"]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True, env=env)
+        
+        raw_markdown = result.stdout
+        if not raw_markdown:
+            return jsonify({'error': "Gemini CLI returned empty response"}), 500
+            
+        # Check if the output suggests it is ready
+        is_ready = "Overall Status: READY" in raw_markdown or "Overall Status: Ready" in raw_markdown or "Status: READY" in raw_markdown
+        
+        return jsonify({
+            'success': True,
+            'property_code': property_code,
+            'report_md': raw_markdown,
+            'is_ready': is_ready
+        })
+        
+    except subprocess.CalledProcessError as e:
+        err_msg = e.stderr or e.stdout or str(e)
+        return jsonify({'error': f"Gemini CLI execution failed: {err_msg}"}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# API Route: Mark Design Readiness subitem as Done on Monday.com
+@app.route('/api/mark-ready/<property_code>', methods=['POST'])
+def mark_ready(property_code):
+    token = creds.get('MONDAY_API_TOKEN')
+    board_id = creds.get('BOARD_ID')
+    
+    if not token:
+        return jsonify({'error': 'Monday.com API Token is not configured.'}), 400
+        
+    url = "https://api.monday.com/v2"
+    headers = {
+        "Authorization": token,
+        "Content-Type": "application/json"
+    }
+    
+    # 1. Query subitems on board to locate 'Review information provided' or 'Review Site Survey Information' for the property
+    query_subitems = """
+    query {
+      boards(ids: [%s]) {
+        items_page(limit: 50) {
+          items {
+            id
+            name
+            subitems {
+              id
+              name
+              board { id }
+            }
+          }
+        }
+      }
+    }
+    """ % board_id
+    
+    try:
+        resp = requests.post(url, json={"query": query_subitems}, headers=headers)
+        if resp.status_code == 200:
+            data = resp.json()
+            items = data.get('data', {}).get('boards', [{}])[0].get('items_page', {}).get('items', [])
+            
+            subitem_id = None
+            subitem_board_id = None
+            
+            # Find matching item by property code prefix/substring
+            for item in items:
+                if property_code in item.get('name', ''):
+                    subitems = item.get('subitems', []) or []
+                    for s in subitems:
+                        s_name = s.get('name', '')
+                        if 'Review Site Survey Information' in s_name or 'Review information provided' in s_name:
+                            subitem_id = s.get('id')
+                            subitem_board_id = s.get('board', {}).get('id')
+                            break
+                    break
+            
+            if subitem_id and subitem_board_id:
+                # Update status of subitem to Done
+                mutation = """
+                mutation {
+                  change_simple_column_value (board_id: "%s", item_id: "%s", column_id: "status", value: "Done") {
+                    id
+                  }
+                }
+                """ % (subitem_board_id, subitem_id)
+                
+                m_resp = requests.post(url, json={"query": mutation}, headers=headers)
+                if m_resp.status_code == 200:
+                    return jsonify({'success': True, 'message': f'Successfully updated Monday.com subitem to Done!'})
+                    
+            return jsonify({'error': f"Could not find a matching survey/review subitem for {property_code} on Monday.com."}), 404
+        else:
+            return jsonify({'error': f"Monday.com returned HTTP {resp.status_code}: {resp.text}"}), resp.status_code
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 # API Route: Fetch Weather via zero-config wttr.in JSON
 @app.route('/api/weather')
 def get_weather():

@@ -1164,9 +1164,9 @@
                                     <i class="fa-solid fa-bolt"></i> Design
                                 </button>`;
                             } else {
-                                actionBtn = `<span style="font-size: 11px; color: var(--text-secondary); opacity: 0.5; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
-                                    <i class="fa-solid fa-hourglass-half"></i> Wait Files
-                                </span>`;
+                                actionBtn = `<button onclick="triggerAudit('${p.name}', '${p.flag}')" style="background: rgba(255, 255, 255, 0.05); border: 1px solid var(--card-border); color: var(--accent); padding: 6px 12px; font-size: 11px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; font-weight: 700; transition: var(--transition);">
+                                    <i class="fa-solid fa-magnifying-glass"></i> Audit
+                                </button>`;
                             }
                             
                             html += `
@@ -1387,40 +1387,117 @@
             evt.currentTarget.classList.add('active');
         }
         
+        async function markAsReadyOnMonday(propertyCode) {
+            try {
+                const res = await fetch(`/api/mark-ready/${propertyCode}`, { method: 'POST' });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    alert(`Success: ${data.message}`);
+                    closeDesignModal();
+                    refreshAllData();
+                } else {
+                    alert(`Failed to update Monday.com:\n\n${data.error}`);
+                }
+            } catch (err) {
+                alert(`Network error updating Monday.com:\n\n${err.message}`);
+            }
+        }
+
+        async function triggerAudit(propertyCode, brand) {
+            const modal = document.getElementById('design-modal');
+            const loading = document.getElementById('modal-loading');
+            const results = document.getElementById('modal-results');
+            const title = document.getElementById('modal-project-title');
+            
+            modal.style.display = 'flex';
+            loading.style.display = 'flex';
+            results.style.display = 'none';
+            title.innerHTML = `<i class="fa-solid fa-magnifying-glass"></i> Auditing SharePoint Folder for: <strong>${propertyCode}</strong>`;
+            
+            const spinnerTitle = loading.querySelector('div');
+            spinnerTitle.textContent = "Auditing SharePoint Folder...";
+            
+            document.querySelectorAll('.modal-tab').forEach(b => b.classList.remove('active'));
+            document.querySelector('[onclick*="tab-sow"]').classList.add('active');
+            document.getElementById('tab-sow').classList.add('active');
+            document.getElementById('tab-diagram').classList.remove('active');
+            document.querySelector('[onclick*="tab-diagram"]').style.display = 'none';
+            
+            try {
+                const url = `/api/check-readiness/${propertyCode}`;
+                const res = await fetch(url);
+                const data = await res.json();
+                
+                if (res.ok && data.success) {
+                    loading.style.display = 'none';
+                    results.style.display = 'flex';
+                    
+                    document.getElementById('design-sow-content').innerHTML = marked.parse(data.report_md);
+                    
+                    const footer = document.querySelector('.modal-footer');
+                    if (data.is_ready) {
+                        footer.innerHTML = `
+                            <button onclick="markAsReadyOnMonday('${propertyCode}')" class="btn-download" style="background: rgba(0, 230, 118, 0.1); border-color: var(--success); color: var(--success); font-weight:700; cursor: pointer;">
+                                <i class="fa-solid fa-square-check"></i>
+                                Mark Ready on Monday
+                            </button>
+                            <button onclick="triggerDesign('${propertyCode}', '${brand}')" class="btn-sync" style="background: linear-gradient(135deg, #00c6fb 0%, #005bea 100%); font-weight:700; border: none; cursor: pointer;">
+                                <i class="fa-solid fa-bolt"></i>
+                                Run Wi-Fi Design Now
+                            </button>
+                        `;
+                    } else {
+                        footer.innerHTML = `
+                            <button onclick="markAsReadyOnMonday('${propertyCode}')" class="btn-download" style="background: rgba(255, 23, 68, 0.05); border-color: var(--danger); color: var(--danger); font-weight:600; cursor: pointer;">
+                                <i class="fa-solid fa-triangle-exclamation"></i>
+                                Force Mark Ready Anyway
+                            </button>
+                            <button onclick="triggerDesign('${propertyCode}', '${brand}')" class="btn-sync" style="background: linear-gradient(135deg, #ffb300 0%, #ff6f00 100%); font-weight:700; border: none; cursor: pointer;">
+                                <i class="fa-solid fa-bolt"></i>
+                                Force Wi-Fi Design
+                            </button>
+                        `;
+                    }
+                } else {
+                    alert(`Audit Failed:\n\n${data.error || 'Server error'}`);
+                    closeDesignModal();
+                }
+            } catch (err) {
+                alert(`Network error during SharePoint audit:\n\n${err.message}`);
+                closeDesignModal();
+            }
+        }
+
         async function triggerDesign(propertyCode, brand) {
             const modal = document.getElementById('design-modal');
             const loading = document.getElementById('modal-loading');
             const results = document.getElementById('modal-results');
             const title = document.getElementById('modal-project-title');
             
-            // 1. Open modal and show loading state
             modal.style.display = 'flex';
             loading.style.display = 'flex';
             results.style.display = 'none';
             title.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i> Designing Wi-Fi Standards for: <strong>${propertyCode}</strong>`;
             
-            // Default first tab to active
+            const spinnerTitle = loading.querySelector('div');
+            spinnerTitle.textContent = "Running Wi-Fi Design Engine...";
+            
             document.querySelectorAll('.modal-tab').forEach(b => b.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => content => c.classList.remove('active'));
             document.querySelector('[onclick*="tab-sow"]').classList.add('active');
             document.getElementById('tab-sow').classList.add('active');
             document.getElementById('tab-diagram').classList.remove('active');
             
             try {
-                // 2. Call backend trigger API
                 const url = `/api/generate-design/${propertyCode}?brand=${encodeURIComponent(brand)}`;
                 const res = await fetch(url);
                 const data = await res.json();
                 
                 if (res.ok && data.success) {
-                    // 3. Hide spinner and show results
                     loading.style.display = 'none';
                     results.style.display = 'flex';
                     
-                    // Render Markdown SOW & BOM
                     document.getElementById('design-sow-content').innerHTML = marked.parse(data.report_md);
                     
-                    // Render Mermaid Diagram
                     const diagramContainer = document.getElementById('design-mermaid-content');
                     const diagramTabBtn = document.querySelector('[onclick*="tab-diagram"]');
                     
@@ -1429,7 +1506,6 @@
                         diagramContainer.textContent = data.mermaid_diagram;
                         diagramTabBtn.style.display = 'block';
                         
-                        // Run Mermaid rendering
                         try {
                             await mermaid.run({ nodes: [diagramContainer] });
                         } catch (mErr) {
@@ -1440,7 +1516,19 @@
                         diagramTabBtn.style.display = 'none';
                     }
                     
-                    // Configure download buttons
+                    // Rebuild standard download footer
+                    const footer = document.querySelector('.modal-footer');
+                    footer.innerHTML = `
+                        <a id="download-excel-btn" href="#" class="btn-download" target="_blank" style="display: none;">
+                            <i class="fa-regular fa-file-excel" style="color: #107c41;"></i>
+                            Download BOM (Excel)
+                        </a>
+                        <a id="download-md-btn" href="#" class="btn-download" target="_blank">
+                            <i class="fa-regular fa-file-lines" style="color: var(--accent);"></i>
+                            Download Design (SOW)
+                        </a>
+                    `;
+                    
                     document.getElementById('download-md-btn').href = data.md_download_url;
                     
                     const excelBtn = document.getElementById('download-excel-btn');
