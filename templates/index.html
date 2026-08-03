@@ -903,8 +903,8 @@
             <div id="modal-results" class="modal-body" style="display: none;">
                 <!-- Modal Tabs -->
                 <div class="modal-tabs" style="margin-bottom: 12px;">
-                    <button class="modal-tab active" onclick="switchTab(event, 'tab-sow')">Design & SOW</button>
-                    <button class="modal-tab" onclick="switchTab(event, 'tab-diagram')">Logical Diagram</button>
+                    <button id="btn-tab-sow" class="modal-tab active" onclick="switchTab(event, 'tab-sow')">Design & SOW</button>
+                    <button id="btn-tab-diagram" class="modal-tab" onclick="switchTab(event, 'tab-diagram')">Logical Diagram</button>
                 </div>
                 
                 <!-- Tab: SOW & Design -->
@@ -1422,10 +1422,10 @@
             
             document.querySelectorAll('.modal-tab').forEach(b => b.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            document.querySelector('[onclick*="tab-sow"]').classList.add('active');
+            document.getElementById('btn-tab-sow').classList.add('active');
             document.getElementById('tab-sow').classList.add('active');
             document.getElementById('tab-diagram').classList.remove('active');
-            document.querySelector('[onclick*="tab-diagram"]').style.display = 'none';
+            document.getElementById('btn-tab-diagram').style.display = 'none';
             
             propertyCode = propertyCode.replace(/[\r\n\t]+/g, ' ').trim();
             brand = brand ? brand.replace(/[\r\n\t]+/g, ' ').trim() : '';
@@ -1491,7 +1491,7 @@
             
             document.querySelectorAll('.modal-tab').forEach(b => b.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            document.querySelector('[onclick*="tab-sow"]').classList.add('active');
+            document.getElementById('btn-tab-sow').classList.add('active');
             document.getElementById('tab-sow').classList.add('active');
             document.getElementById('tab-diagram').classList.remove('active');
             
@@ -1510,7 +1510,7 @@
                     document.getElementById('design-sow-content').innerHTML = marked.parse(data.report_md);
                     
                     const diagramContainer = document.getElementById('design-mermaid-content');
-                    const diagramTabBtn = document.querySelector('[onclick*="tab-diagram"]');
+                    const diagramTabBtn = document.getElementById('btn-tab-diagram');
                     
                     if (data.mermaid_diagram && data.mermaid_diagram.trim() !== '') {
                         diagramContainer.removeAttribute('data-processed');
