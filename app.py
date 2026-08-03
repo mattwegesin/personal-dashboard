@@ -413,10 +413,20 @@ def get_outlook_unread_emails():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Helper: Read reference standards files from network_design_web directory
+# Helper: Read reference standards files from local or sibling network_design_web directory
 def get_reference_content(filename):
-    # Try finding in sibling network_design_web/references folder
     current_dir = os.path.abspath(os.path.dirname(__file__))
+    
+    # 1. Try local references folder (copied for Render deployment)
+    local_ref_path = os.path.join(current_dir, 'references', filename)
+    if os.path.exists(local_ref_path):
+        try:
+            with open(local_ref_path, 'r') as f:
+                return f.read()
+        except Exception:
+            pass
+            
+    # 2. Try finding in sibling network_design_web/references folder (for local dev)
     ref_path = os.path.abspath(os.path.join(current_dir, '..', 'network_design_web', 'references', filename))
     if os.path.exists(ref_path):
         try:
@@ -425,7 +435,7 @@ def get_reference_content(filename):
         except Exception:
             pass
             
-    # Direct sibling folder search fallback
+    # 3. Direct sibling folder search fallback
     fallback_path = find_workspace_file(filename, os.path.join('network_design_web', 'references'))
     if os.path.exists(fallback_path):
         try:
