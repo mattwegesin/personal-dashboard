@@ -3,8 +3,7 @@ import sys
 import json
 import time
 import requests
-import subprocess
-import shutil
+import base64
 from flask import Flask, render_template, jsonify, request
 from dotenv import load_dotenv
 from google import genai
@@ -161,7 +160,7 @@ def get_outlook_token():
                     'client_id': client_id,
                     'grant_type': 'refresh_token',
                     'refresh_token': refresh_token,
-                    'scope': 'Mail.Read Mail.Send Calendars.Read Calendars.ReadWrite offline_access'
+                    'scope': 'Mail.Read Mail.Send Calendars.Read Calendars.ReadWrite offline_access Files.Read.All Sites.Read.All'
                 }
                 resp = requests.post(url, data=data)
                 if resp.status_code == 200:
@@ -177,10 +176,441 @@ def get_outlook_token():
         
     return None, "No active tokens found. Please run authentication in outlook-mcp."
 
-# Route: Dashboard Homepage
-@app.route('/')
-def index():
-    return render_template('index.html')
+# Helper: Read reference standards files from local or sibling network_design_web directory
+def get_reference_content(filename):
+    current_dir = os.path.abspath(os.path.dirname(__file__))
+    
+    # 1. Try local references folder (copied for Render deployment)
+    local_ref_path = os.path.join(current_dir, 'references', filename)
+    if os.path.exists(local_ref_path):
+        try:
+            with open(local_ref_path, 'r') as f:
+                return f.read()
+        except Exception:
+            pass
+            
+    # 2. Try finding in sibling network_design_web/references folder (for local dev)
+    ref_path = os.path.abspath(os.path.join(current_dir, '..', 'network_design_web', 'references', filename))
+    if os.path.exists(ref_path):
+        try:
+            with open(ref_path, 'r') as f:
+                return f.read()
+        except Exception:
+            pass
+            
+    # 3. Direct sibling folder search fallback
+    fallback_path = find_workspace_file(filename, os.path.join('network_design_web', 'references'))
+    if fallback_path and os.path.exists(fallback_path):
+        try:
+            with open(fallback_path, 'r') as f:
+                return f.read()
+        except Exception:
+            pass
+            
+    return ""
+
+def download_sharepoint_files(sp_link, access_token, property_code):
+    if not sp_link:
+        return [], "No SharePoint link provided."
+        
+    # Create the encoded URL for Microsoft Graph 'shares' endpoint
+    b64 = base64.urlsafe_b64encode(sp_link.encode('utf-8')).decode('utf-8')
+    encoded_url = 'u!' + b64.rstrip('=')
+    
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Accept': 'application/json'
+    }
+    
+    # Get children of the folder
+    graph_url = f"https://graph.microsoft.com/v1.0/shares/{encoded_url}/driveItem/children"
+    
+    try:
+        resp = requests.get(graph_url, headers=headers)
+        if resp.status_code == 403:
+            return [], "HTTP 403 Access Denied. Your Outlook/Microsoft token does not have 'Files.Read.All' or 'Sites.Read.All' permissions. Please re-authenticate your outlook-mcp app locally to fetch a new token with these scopes, then update the Render environment variable."
+        elif resp.status_code != 200:
+            return [], f"Error fetching SP folder: {resp.status_code} - {resp.text}"
+            
+        data = resp.json()
+        items = data.get('value', [])
+        
+        output_dir = os.path.join(os.path.dirname(__file__), 'static', 'downloads', property_code)
+        os.makedirs(output_dir, exist_ok=True)
+        downloaded_files = []
+        
+        for item in items:
+            if 'file' in item:
+                file_name = item.get('name')
+                download_url = item.get('@microsoft.graph.downloadUrl')
+                
+                if download_url and file_name:
+                    # Filter for standard document types to avoid large binaries
+                    if file_name.endswith(('.pdf', '.docx', '.xlsx', '.csv', '.txt', '.png', '.jpg', '.jpeg')):
+                        file_path = os.path.join(output_dir, file_name)
+                        file_resp = requests.get(download_url)
+                        if file_resp.status_code == 200:
+                            with open(file_path, 'wb') as f:
+                                f.write(file_resp.content)
+                            downloaded_files.append(file_path)
+                            
+        return downloaded_files, None
+    except Exception as e:
+        return [], f"Error downloading SP files: {e}"
+
+# API Route: Trigger Wi-Fi Design Engine using Pure Python Google GenAI SDK
+@app.route('/api/generate-design/<property_code>')
+def generate_design(property_code):
+    api_key = os.environ.get('GEMINI_API_KEY')
+    if not api_key:
+        design_env = find_workspace_file('.env', 'network_design_web')
+        if os.path.exists(design_env):
+            try:
+                with open(design_env, 'r') as f:
+                    for line in f:
+                        if 'GEMINI_API_KEY=' in line:
+                            api_key = line.split('GEMINI_API_KEY=', 1)[1].strip().strip('"\'')
+                            break
+            except Exception:
+                pass
+                
+    if not api_key:
+        return jsonify({'error': 'GEMINI_API_KEY is not configured on the server. Please check your credentials.'}), 500
+
+    brand_param = request.args.get('brand', '')
+    sp_link = request.args.get('sp_link', '')
+    brand = brand_param.upper().strip() if brand_param and brand_param.strip() else 'IHG'
+    if brand == 'N/A' or brand == 'NONE':
+        brand = 'IHG'
+    
+    # Map brand name to standard reference standards
+    brand_file = 'ihg-meraki.md' # Default to IHG Meraki for unmapped flags
+    if 'IHG' in brand:
+        brand_file = 'ihg-meraki.md'
+    elif 'WESTERN' in brand or 'BW' in brand:
+        brand_file = 'best-western-aruba.md'
+    elif 'CHOICE' in brand:
+        brand_file = 'choice-aruba.md'
+    elif 'WYNDHAM' in brand:
+        brand_file = 'wyndham-aruba.md'
+    elif 'OMADA' in brand:
+        brand_file = 'independent-omada.md'
+        
+    context = get_reference_content(brand_file)
+    
+    # Build the final prompt for Gemini
+    prompt = (
+        f"Create a complete, detailed Wi-Fi network design, "
+        f"Bill of Materials (BOM) in Markdown table format, a Statement of Work (SOW), and a Logical Network Diagram "
+        f"using Mermaid.js syntax for the property code '{property_code}'. Search the provided attached files or reference data for "
+        f"any floorplans, layout details, and room counts matching '{property_code}'."
+    )
+    
+    if context:
+        prompt += f"\n\n--- REFERENCE BRAND STANDARD REFERENCE DATA ({brand_file}) ---\n{context}"
+        
+    # Append the custom SOW and Network Diagram instructions
+    sys_instruction = NETWORK_DESIGNER_INSTRUCTION + """
+
+    ### Statement of Work (SOW) Generation
+    You must also generate a Statement of Work based on the standard format. 
+    Maintain the professional formatting:
+    - Executive Summary
+    - Scope of Work
+    - Deliverables
+    - Timeline
+    - Exclusions
+    - Pricing Structure
+
+    Crucially, populate **Section 3.1 (Equipment)** with the specific hardware required for each equipment room (MDF/IDF) based on your network design BOM.
+    Format for Section 3.1:
+    #### 3.1 Equipment per Location
+    - **MDF (Main Distribution Frame)**
+    - [Quantity] x [Part Number] - [Description]
+    - **IDF [Number] (Intermediate Distribution Frame)**
+    - [Quantity] x [Part Number] - [Description]
+    
+    ### Logical Network Diagram
+    You must generate a logical network diagram using Mermaid.js syntax. 
+    Use a Markdown code block with `mermaid` as the language (i.e. ```mermaid).
+    Map the connections from the Gateway -> MDF -> IDFs -> Switches -> APs.
+    Keep it high-level and clear.
+    """
+    
+    # Handle SharePoint Files Download
+    contents = [prompt]
+    client = genai.Client(api_key=api_key)
+    
+    if sp_link:
+        ms_token, err = get_outlook_token()
+        if not err and ms_token:
+            downloaded_files, sp_err = download_sharepoint_files(sp_link, ms_token, property_code)
+            if sp_err:
+                return jsonify({'error': sp_err}), 400
+                
+            # Upload files to Gemini API
+            for file_path in downloaded_files:
+                try:
+                    uploaded_file = client.files.upload(file=file_path)
+                    contents.append(uploaded_file)
+                except Exception as upload_err:
+                    print(f"Error uploading {file_path} to Gemini: {upload_err}")
+    
+    # Path for storing results
+    output_dir = os.path.join(os.path.dirname(__file__), 'static', 'designs')
+    os.makedirs(output_dir, exist_ok=True)
+    
+    md_file_path = os.path.join(output_dir, f"{property_code}_design_report.md")
+    excel_file_path = os.path.join(output_dir, f"{property_code}_BOM.xlsx")
+    
+    try:
+        response = client.models.generate_content(
+            model='gemini-3.1-pro-preview',  # Upgraded to pro for maximum quality and design compliance
+            contents=contents,
+            config=types.GenerateContentConfig(
+                system_instruction=sys_instruction,
+                temperature=0.2, # Low temperature for accurate deterministic BOMs
+            )
+        )
+        
+        raw_markdown = response.text
+        if not raw_markdown:
+            return jsonify({'error': "Gemini API returned an empty response"}), 500
+            
+        # Save raw report
+        with open(md_file_path, "w") as f:
+            f.write(raw_markdown)
+            
+        # Parse BOM table from markdown to generate Excel spreadsheet
+        bom_rows = []
+        is_table = False
+        headers = []
+        
+        for line in raw_markdown.split('\n'):
+            if '|' in line:
+                parts = [p.strip() for p in line.split('|')[1:-1]]
+                if not parts:
+                    continue
+                # Skip divider lines like |---|---|
+                if all(all(c == '-' or c == ' ' for c in p) for p in parts):
+                    continue
+                if not is_table:
+                    headers = parts
+                    is_table = True
+                else:
+                    # Pad row if columns don't match headers
+                    while len(parts) < len(headers):
+                        parts.append('')
+                    bom_rows.append(parts[:len(headers)])
+            else:
+                is_table = False
+                
+        # Generate Excel BOM if table was parsed
+        if bom_rows and headers:
+            try:
+                import pandas as pd
+                df = pd.DataFrame(bom_rows, columns=headers)
+                df.to_excel(excel_file_path, index=False)
+            except Exception as e:
+                print(f"Error generating Excel for {property_code}: {e}")
+                
+        # Extract Mermaid diagram block
+        mermaid_code = ""
+        if "```mermaid" in raw_markdown:
+            parts = raw_markdown.split("```mermaid", 1)
+            if len(parts) == 2:
+                mermaid_code = parts[1].split("```", 1)[0].strip()
+                
+        return jsonify({
+            'success': True,
+            'property_code': property_code,
+            'report_md': raw_markdown,
+            'mermaid_diagram': mermaid_code,
+            'md_download_url': f"/static/designs/{property_code}_design_report.md",
+            'excel_download_url': f"/static/designs/{property_code}_BOM.xlsx" if os.path.exists(excel_file_path) else None
+        })
+        
+    except Exception as e:
+        return jsonify({'error': f"Gemini API execution failed: {str(e)}"}), 500
+
+# API Route: Check SharePoint files for Design Readiness using Pure Python Google GenAI SDK
+@app.route('/api/check-readiness/<property_code>')
+def check_readiness(property_code):
+    api_key = os.environ.get('GEMINI_API_KEY')
+    if not api_key:
+        design_env = find_workspace_file('.env', 'network_design_web')
+        if os.path.exists(design_env):
+            try:
+                with open(design_env, 'r') as f:
+                    for line in f:
+                        if 'GEMINI_API_KEY=' in line:
+                            api_key = line.split('GEMINI_API_KEY=', 1)[1].strip().strip('"\'')
+                            break
+            except Exception:
+                pass
+                
+    if not api_key:
+        return jsonify({'error': 'GEMINI_API_KEY is not configured on the server. Please check your credentials.'}), 500
+        
+    context = get_reference_content('design-criteria.md')
+    sp_link = request.args.get('sp_link', '')
+    
+    prompt = (
+        f"Evaluate the provided attached files for design readiness for property '{property_code}'. List the files found and explain if they contain the floorplans, "
+        f"wall materials, scales, and room counts needed to generate a professional Wi-Fi network design. "
+        f"Conclude the report with a clear line: 'Overall Status: READY' if ready, or 'Overall Status: INCOMPLETE' if missing info."
+    )
+    
+    if context:
+        prompt += f"\n\n--- GENERAL DESIGN CRITERIA STANDARD ---\n{context}"
+        
+    contents = [prompt]
+    client = genai.Client(api_key=api_key)
+    
+    if sp_link:
+        ms_token, err = get_outlook_token()
+        if not err and ms_token:
+            downloaded_files, sp_err = download_sharepoint_files(sp_link, ms_token, property_code)
+            if sp_err:
+                return jsonify({'error': sp_err}), 400
+                
+            for file_path in downloaded_files:
+                try:
+                    uploaded_file = client.files.upload(file=file_path)
+                    contents.append(uploaded_file)
+                except Exception as upload_err:
+                    print(f"Error uploading {file_path} to Gemini: {upload_err}")
+    else:
+        return jsonify({'error': "No SharePoint link was provided for this project."}), 400
+        
+    try:
+        response = client.models.generate_content(
+            model='gemini-3.1-pro-preview',
+            contents=contents,
+            config=types.GenerateContentConfig(
+                system_instruction=READINESS_INSTRUCTION,
+                temperature=0.2,
+            )
+        )
+        
+        raw_markdown = response.text
+        if not raw_markdown:
+            return jsonify({'error': "Gemini API returned an empty response"}), 500
+            
+        # Check if the output suggests it is ready
+        is_ready = "Overall Status: READY" in raw_markdown or "Overall Status: Ready" in raw_markdown or "Status: READY" in raw_markdown
+        
+        return jsonify({
+            'success': True,
+            'property_code': property_code,
+            'report_md': raw_markdown,
+            'is_ready': is_ready
+        })
+        
+    except Exception as e:
+        return jsonify({'error': f"Gemini API execution failed: {str(e)}"}), 500
+
+# API Route: Mark Design Readiness subitem as Done on Monday.com
+@app.route('/api/mark-ready/<property_code>', methods=['POST'])
+def mark_ready(property_code):
+    token = creds.get('MONDAY_API_TOKEN')
+    board_id = creds.get('BOARD_ID')
+    
+    if not token:
+        return jsonify({'error': 'Monday.com API Token is not configured.'}), 400
+        
+    url = "https://api.monday.com/v2"
+    headers = {
+        "Authorization": token,
+        "Content-Type": "application/json"
+    }
+    
+    # 1. Query subitems on board to locate 'Review information provided' or 'Review Site Survey Information' for the property
+    query_subitems = """
+    query {
+      boards(ids: [%s]) {
+        items_page(limit: 50) {
+          items {
+            id
+            name
+            subitems {
+              id
+              name
+              board { id }
+            }
+          }
+        }
+      }
+    }
+    """ % board_id
+    
+    try:
+        resp = requests.post(url, json={"query": query_subitems}, headers=headers)
+        if resp.status_code == 200:
+            data = resp.json()
+            items = data.get('data', {}).get('boards', [{}])[0].get('items_page', {}).get('items', [])
+            
+            subitem_id = None
+            subitem_board_id = None
+            
+            # Find matching item by property code prefix/substring
+            for item in items:
+                if property_code in item.get('name', ''):
+                    subitems = item.get('subitems', []) or []
+                    for s in subitems:
+                        s_name = s.get('name', '')
+                        if 'Review Site Survey Information' in s_name or 'Review information provided' in s_name:
+                            subitem_id = s.get('id')
+                            subitem_board_id = s.get('board', {}).get('id')
+                            break
+                    break
+            
+            if subitem_id and subitem_board_id:
+                # Update status of subitem to Done
+                mutation = """
+                mutation {
+                  change_simple_column_value (board_id: "%s", item_id: "%s", column_id: "status", value: "Done") {
+                    id
+                  }
+                }
+                """ % (subitem_board_id, subitem_id)
+                
+                m_resp = requests.post(url, json={"query": mutation}, headers=headers)
+                if m_resp.status_code == 200:
+                    return jsonify({'success': True, 'message': f'Successfully updated Monday.com subitem to Done!'})
+                    
+            return jsonify({'error': f"Could not find a matching survey/review subitem for {property_code} on Monday.com."}), 404
+        else:
+            return jsonify({'error': f"Monday.com returned HTTP {resp.status_code}: {resp.text}"}), resp.status_code
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# API Route: Fetch Weather via zero-config wttr.in JSON
+@app.route('/api/weather')
+def get_weather():
+    city = request.args.get('city', 'Atlanta')
+    url = f"https://wttr.in/{city}?format=j1"
+    
+    try:
+        resp = requests.get(url)
+        if resp.status_code == 200:
+            data = resp.json()
+            current_condition = data.get('current_condition', [{}])[0]
+            nearest_area = data.get('nearest_area', [{}])[0]
+            
+            weather_data = {
+                'temp_C': current_condition.get('temp_C', 'N/A'),
+                'temp_F': current_condition.get('temp_F', 'N/A'),
+                'desc': current_condition.get('weatherDesc', [{}])[0].get('value', 'N/A'),
+                'humidity': current_condition.get('humidity', 'N/A'),
+                'windspeed': current_condition.get('windspeedKmph', 'N/A'),
+                'city': nearest_area.get('areaName', [{}])[0].get('value', city)
+            }
+            return jsonify(weather_data)
+        else:
+            return jsonify({'error': f"wttr.in returned HTTP {resp.status_code}"}), resp.status_code
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # API Route: Fetch Monday.com Projects
 @app.route('/api/monday-projects')
@@ -419,333 +849,6 @@ def get_outlook_unread_emails():
             return jsonify({'emails': formatted_emails})
         else:
             return jsonify({'error': f"Graph API returned HTTP {resp.status_code} - {resp.text}"}), resp.status_code
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# Helper: Read reference standards files from local or sibling network_design_web directory
-def get_reference_content(filename):
-    current_dir = os.path.abspath(os.path.dirname(__file__))
-    
-    # 1. Try local references folder (copied for Render deployment)
-    local_ref_path = os.path.join(current_dir, 'references', filename)
-    if os.path.exists(local_ref_path):
-        try:
-            with open(local_ref_path, 'r') as f:
-                return f.read()
-        except Exception:
-            pass
-            
-    # 2. Try finding in sibling network_design_web/references folder (for local dev)
-    ref_path = os.path.abspath(os.path.join(current_dir, '..', 'network_design_web', 'references', filename))
-    if os.path.exists(ref_path):
-        try:
-            with open(ref_path, 'r') as f:
-                return f.read()
-        except Exception:
-            pass
-            
-    # 3. Direct sibling folder search fallback
-    fallback_path = find_workspace_file(filename, os.path.join('network_design_web', 'references'))
-    if os.path.exists(fallback_path):
-        try:
-            with open(fallback_path, 'r') as f:
-                return f.read()
-        except Exception:
-            pass
-            
-    return ""
-
-# API Route: Trigger Wi-Fi Design Engine using Pure Python Google GenAI SDK
-@app.route('/api/generate-design/<property_code>')
-def generate_design(property_code):
-    api_key = os.environ.get('GEMINI_API_KEY')
-    if not api_key:
-        # Sibling folder load check fallback
-        design_env = find_workspace_file('.env', 'network_design_web')
-        if os.path.exists(design_env):
-            try:
-                with open(design_env, 'r') as f:
-                    for line in f:
-                        if 'GEMINI_API_KEY=' in line:
-                            api_key = line.split('GEMINI_API_KEY=', 1)[1].strip().strip('"\'')
-                            break
-            except Exception:
-                pass
-                
-    if not api_key:
-        return jsonify({'error': 'GEMINI_API_KEY is not configured on the server. Please check your credentials.'}), 500
-
-    brand_param = request.args.get('brand', '')
-    sp_link = request.args.get('sp_link', '')
-    brand = brand_param.upper().strip() if brand_param and brand_param.strip() else 'IHG'
-    if brand == 'N/A' or brand == 'NONE':
-        brand = 'IHG'
-    
-    # Map brand name to standard reference standards
-    brand_file = 'ihg-meraki.md' # Default to IHG Meraki for unmapped flags
-    if 'IHG' in brand:
-        brand_file = 'ihg-meraki.md'
-    elif 'WESTERN' in brand or 'BW' in brand:
-        brand_file = 'best-western-aruba.md'
-    elif 'CHOICE' in brand:
-        brand_file = 'choice-aruba.md'
-    elif 'WYNDHAM' in brand:
-        brand_file = 'wyndham-aruba.md'
-    elif 'OMADA' in brand:
-        brand_file = 'independent-omada.md'
-        
-    # Build the final prompt for Gemini CLI
-    prompt = (
-        f"Activate the 'network-designer' skill. Create a complete, detailed Wi-Fi network design, "
-        f"Bill of Materials (BOM) in Markdown table format, a Statement of Work (SOW), and a Logical Network Diagram "
-        f"using Mermaid.js syntax for the property code '{property_code}'. Search SharePoint for files matching '{property_code}' "
-    )
-    if sp_link:
-        prompt += f"(specifically at this folder location: '{sp_link}') "
-        
-    prompt += (
-        f"to extract the true room counts, wall materials, and floorplans for the design. "
-        f"Apply standard brand design parameters based on the reference file '{brand_file}'."
-    )
-    
-    # Path for storing results
-    output_dir = os.path.join(os.path.dirname(__file__), 'static', 'designs')
-    os.makedirs(output_dir, exist_ok=True)
-    
-    md_file_path = os.path.join(output_dir, f"{property_code}_design_report.md")
-    excel_file_path = os.path.join(output_dir, f"{property_code}_BOM.xlsx")
-    
-    try:
-        # Resolve Gemini CLI path dynamically
-        gemini_path = shutil.which("gemini")
-        if not gemini_path or not os.path.exists(gemini_path):
-            gemini_path = "/opt/homebrew/bin/gemini"
-            
-        if not os.path.exists(gemini_path):
-            return jsonify({'error': "Gemini CLI agent not found! To use SharePoint MCP integration, you MUST run this dashboard locally (http://localhost:5001). Render's cloud servers cannot access your local Microsoft SharePoint credentials."}), 500
-
-        # Run Gemini CLI in correct path environment using absolute path
-        env = os.environ.copy()
-        env['PATH'] = f"/opt/homebrew/bin:/usr/local/bin:{env.get('PATH', '')}"
-        
-        cmd = [gemini_path, "-p", prompt, "--approval-mode", "yolo"]
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True, env=env)
-        
-        raw_markdown = result.stdout
-        if not raw_markdown:
-            return jsonify({'error': "Gemini CLI returned an empty response"}), 500
-            
-        # Save raw report
-        with open(md_file_path, "w") as f:
-            f.write(raw_markdown)
-            
-        # Parse BOM table from markdown to generate Excel spreadsheet
-        bom_rows = []
-        is_table = False
-        headers = []
-        
-        for line in raw_markdown.split('\n'):
-            if '|' in line:
-                parts = [p.strip() for p in line.split('|')[1:-1]]
-                if not parts:
-                    continue
-                # Skip divider lines like |---|---|
-                if all(all(c == '-' or c == ' ' for c in p) for p in parts):
-                    continue
-                if not is_table:
-                    headers = parts
-                    is_table = True
-                else:
-                    # Pad row if columns don't match headers
-                    while len(parts) < len(headers):
-                        parts.append('')
-                    bom_rows.append(parts[:len(headers)])
-            else:
-                is_table = False
-                
-        # Generate Excel BOM if table was parsed
-        if bom_rows and headers:
-            try:
-                import pandas as pd
-                df = pd.DataFrame(bom_rows, columns=headers)
-                df.to_excel(excel_file_path, index=False)
-            except Exception as e:
-                print(f"Error generating Excel for {property_code}: {e}")
-                
-        # Extract Mermaid diagram block
-        mermaid_code = ""
-        if "```mermaid" in raw_markdown:
-            parts = raw_markdown.split("```mermaid", 1)
-            if len(parts) == 2:
-                mermaid_code = parts[1].split("```", 1)[0].strip()
-                
-        return jsonify({
-            'success': True,
-            'property_code': property_code,
-            'report_md': raw_markdown,
-            'mermaid_diagram': mermaid_code,
-            'md_download_url': f"/static/designs/{property_code}_design_report.md",
-            'excel_download_url': f"/static/designs/{property_code}_BOM.xlsx" if os.path.exists(excel_file_path) else None
-        })
-        
-    except subprocess.CalledProcessError as e:
-        err_msg = e.stderr or e.stdout or str(e)
-        return jsonify({'error': f"Gemini CLI execution failed: {err_msg}"}), 500
-    except Exception as e:
-        return jsonify({'error': f"Gemini API execution failed: {str(e)}"}), 500
-
-# API Route: Check SharePoint files for Design Readiness using Gemini CLI
-@app.route('/api/check-readiness/<property_code>')
-def check_readiness(property_code):
-    sp_link = request.args.get('sp_link', '')
-    
-    prompt = (
-        f"Activate the 'network-design-readiness' skill. Search SharePoint for files matching the property code '{property_code}'. "
-    )
-    if sp_link:
-        prompt += f"(specifically at this folder location: '{sp_link}') "
-        
-    prompt += (
-        f"Evaluate the discovered files for design readiness. List the files found and explain if they contain the floorplans, "
-        f"wall materials, scales, and room counts needed to generate a professional Wi-Fi network design. "
-        f"Conclude the report with a clear line: 'Overall Status: READY' if ready, or 'Overall Status: INCOMPLETE' if missing info."
-    )
-    
-    try:
-        # Resolve Gemini CLI path dynamically
-        gemini_path = shutil.which("gemini")
-        if not gemini_path or not os.path.exists(gemini_path):
-            gemini_path = "/opt/homebrew/bin/gemini"
-            
-        if not os.path.exists(gemini_path):
-            return jsonify({'error': "Gemini CLI agent not found! To use SharePoint MCP integration, you MUST run this dashboard locally (http://localhost:5001). Render's cloud servers cannot access your local Microsoft SharePoint credentials."}), 500
-
-        # Run Gemini CLI using absolute path
-        env = os.environ.copy()
-        env['PATH'] = f"/opt/homebrew/bin:/usr/local/bin:{env.get('PATH', '')}"
-        
-        cmd = [gemini_path, "-p", prompt, "--approval-mode", "yolo"]
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True, env=env)
-        
-        raw_markdown = result.stdout
-        if not raw_markdown:
-            return jsonify({'error': "Gemini CLI returned an empty response"}), 500
-            
-        # Check if the output suggests it is ready
-        is_ready = "Overall Status: READY" in raw_markdown or "Overall Status: Ready" in raw_markdown or "Status: READY" in raw_markdown
-        
-        return jsonify({
-            'success': True,
-            'property_code': property_code,
-            'report_md': raw_markdown,
-            'is_ready': is_ready
-        })
-        
-    except subprocess.CalledProcessError as e:
-        err_msg = e.stderr or e.stdout or str(e)
-        return jsonify({'error': f"Gemini CLI execution failed: {err_msg}"}), 500
-    except Exception as e:
-        return jsonify({'error': f"Gemini Execution failed: {str(e)}"}), 500
-
-# API Route: Mark Design Readiness subitem as Done on Monday.com
-@app.route('/api/mark-ready/<property_code>', methods=['POST'])
-def mark_ready(property_code):
-    token = creds.get('MONDAY_API_TOKEN')
-    board_id = creds.get('BOARD_ID')
-    
-    if not token:
-        return jsonify({'error': 'Monday.com API Token is not configured.'}), 400
-        
-    url = "https://api.monday.com/v2"
-    headers = {
-        "Authorization": token,
-        "Content-Type": "application/json"
-    }
-    
-    # 1. Query subitems on board to locate 'Review information provided' or 'Review Site Survey Information' for the property
-    query_subitems = """
-    query {
-      boards(ids: [%s]) {
-        items_page(limit: 50) {
-          items {
-            id
-            name
-            subitems {
-              id
-              name
-              board { id }
-            }
-          }
-        }
-      }
-    }
-    """ % board_id
-    
-    try:
-        resp = requests.post(url, json={"query": query_subitems}, headers=headers)
-        if resp.status_code == 200:
-            data = resp.json()
-            items = data.get('data', {}).get('boards', [{}])[0].get('items_page', {}).get('items', [])
-            
-            subitem_id = None
-            subitem_board_id = None
-            
-            # Find matching item by property code prefix/substring
-            for item in items:
-                if property_code in item.get('name', ''):
-                    subitems = item.get('subitems', []) or []
-                    for s in subitems:
-                        s_name = s.get('name', '')
-                        if 'Review Site Survey Information' in s_name or 'Review information provided' in s_name:
-                            subitem_id = s.get('id')
-                            subitem_board_id = s.get('board', {}).get('id')
-                            break
-                    break
-            
-            if subitem_id and subitem_board_id:
-                # Update status of subitem to Done
-                mutation = """
-                mutation {
-                  change_simple_column_value (board_id: "%s", item_id: "%s", column_id: "status", value: "Done") {
-                    id
-                  }
-                }
-                """ % (subitem_board_id, subitem_id)
-                
-                m_resp = requests.post(url, json={"query": mutation}, headers=headers)
-                if m_resp.status_code == 200:
-                    return jsonify({'success': True, 'message': f'Successfully updated Monday.com subitem to Done!'})
-                    
-            return jsonify({'error': f"Could not find a matching survey/review subitem for {property_code} on Monday.com."}), 404
-        else:
-            return jsonify({'error': f"Monday.com returned HTTP {resp.status_code}: {resp.text}"}), resp.status_code
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# API Route: Fetch Weather via zero-config wttr.in JSON
-@app.route('/api/weather')
-def get_weather():
-    city = request.args.get('city', 'Atlanta')
-    url = f"https://wttr.in/{city}?format=j1"
-    
-    try:
-        resp = requests.get(url)
-        if resp.status_code == 200:
-            data = resp.json()
-            current_condition = data.get('current_condition', [{}])[0]
-            nearest_area = data.get('nearest_area', [{}])[0]
-            
-            weather_data = {
-                'temp_C': current_condition.get('temp_C', 'N/A'),
-                'temp_F': current_condition.get('temp_F', 'N/A'),
-                'desc': current_condition.get('weatherDesc', [{}])[0].get('value', 'N/A'),
-                'humidity': current_condition.get('humidity', 'N/A'),
-                'windspeed': current_condition.get('windspeedKmph', 'N/A'),
-                'city': nearest_area.get('areaName', [{}])[0].get('value', city)
-            }
-            return jsonify(weather_data)
-        else:
-            return jsonify({'error': f"wttr.in returned HTTP {resp.status_code}"}), resp.status_code
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
