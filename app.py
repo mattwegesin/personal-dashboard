@@ -4,6 +4,7 @@ import json
 import time
 import requests
 import subprocess
+import shutil
 from flask import Flask, render_template, jsonify, request
 from dotenv import load_dotenv
 from google import genai
@@ -515,11 +516,19 @@ def generate_design(property_code):
     excel_file_path = os.path.join(output_dir, f"{property_code}_BOM.xlsx")
     
     try:
+        # Resolve Gemini CLI path dynamically
+        gemini_path = shutil.which("gemini")
+        if not gemini_path or not os.path.exists(gemini_path):
+            gemini_path = "/opt/homebrew/bin/gemini"
+            
+        if not os.path.exists(gemini_path):
+            return jsonify({'error': "Gemini CLI agent not found! To use SharePoint MCP integration, you MUST run this dashboard locally (http://localhost:5001). Render's cloud servers cannot access your local Microsoft SharePoint credentials."}), 500
+
         # Run Gemini CLI in correct path environment using absolute path
         env = os.environ.copy()
         env['PATH'] = f"/opt/homebrew/bin:/usr/local/bin:{env.get('PATH', '')}"
         
-        cmd = ["/opt/homebrew/bin/gemini", "-p", prompt, "--approval-mode", "yolo"]
+        cmd = [gemini_path, "-p", prompt, "--approval-mode", "yolo"]
         result = subprocess.run(cmd, capture_output=True, text=True, check=True, env=env)
         
         raw_markdown = result.stdout
@@ -603,11 +612,19 @@ def check_readiness(property_code):
     )
     
     try:
+        # Resolve Gemini CLI path dynamically
+        gemini_path = shutil.which("gemini")
+        if not gemini_path or not os.path.exists(gemini_path):
+            gemini_path = "/opt/homebrew/bin/gemini"
+            
+        if not os.path.exists(gemini_path):
+            return jsonify({'error': "Gemini CLI agent not found! To use SharePoint MCP integration, you MUST run this dashboard locally (http://localhost:5001). Render's cloud servers cannot access your local Microsoft SharePoint credentials."}), 500
+
         # Run Gemini CLI using absolute path
         env = os.environ.copy()
         env['PATH'] = f"/opt/homebrew/bin:/usr/local/bin:{env.get('PATH', '')}"
         
-        cmd = ["/opt/homebrew/bin/gemini", "-p", prompt, "--approval-mode", "yolo"]
+        cmd = [gemini_path, "-p", prompt, "--approval-mode", "yolo"]
         result = subprocess.run(cmd, capture_output=True, text=True, check=True, env=env)
         
         raw_markdown = result.stdout
