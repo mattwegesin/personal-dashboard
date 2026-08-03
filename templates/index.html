@@ -1501,7 +1501,14 @@
             try {
                 const url = `/api/generate-design/${encodeURIComponent(propertyCode)}?brand=${encodeURIComponent(brand)}`;
                 const res = await fetch(url);
-                const data = await res.json();
+                
+                let data;
+                const rawText = await res.text();
+                try {
+                    data = JSON.parse(rawText);
+                } catch (parseErr) {
+                    throw new Error(`Invalid JSON response from server (Status ${res.status}):\n${rawText.substring(0, 150)}...`);
+                }
                 
                 if (res.ok && data.success) {
                     loading.style.display = 'none';
