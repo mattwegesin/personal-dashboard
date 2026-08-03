@@ -1160,14 +1160,15 @@
                             
                             let cleanName = p.name.replace(/[\r\n]+/g, ' ').replace(/'/g, "\\'").trim();
                             let cleanFlag = p.flag !== 'N/A' ? p.flag.replace(/[\r\n]+/g, ' ').replace(/'/g, "\\'").trim() : '';
+                            let cleanLink = p.sp_link ? p.sp_link.replace(/[\r\n]+/g, '').replace(/'/g, "\\'").trim() : '';
                             
                             let actionBtn = '';
                             if (p.readiness === 'READY' || p.readiness === 'SUBMITTED') {
-                                actionBtn = `<button onclick="triggerDesign('${cleanName}', '${cleanFlag}')" style="background: linear-gradient(135deg, #00c6fb 0%, #005bea 100%); padding: 6px 12px; font-size: 11px; border-radius: 4px; box-shadow: 0 2px 6px rgba(0, 198, 251, 0.2); display: flex; align-items: center; gap: 4px; border: none; color: white; cursor: pointer; font-weight: 700; transition: var(--transition);">
+                                actionBtn = `<button onclick="triggerDesign('${cleanName}', '${cleanFlag}', '${cleanLink}')" style="background: linear-gradient(135deg, #00c6fb 0%, #005bea 100%); padding: 6px 12px; font-size: 11px; border-radius: 4px; box-shadow: 0 2px 6px rgba(0, 198, 251, 0.2); display: flex; align-items: center; gap: 4px; border: none; color: white; cursor: pointer; font-weight: 700; transition: var(--transition);">
                                     <i class="fa-solid fa-bolt"></i> Design
                                 </button>`;
                             } else {
-                                actionBtn = `<button onclick="triggerAudit('${cleanName}', '${cleanFlag}')" style="background: rgba(255, 255, 255, 0.05); border: 1px solid var(--card-border); color: var(--accent); padding: 6px 12px; font-size: 11px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; font-weight: 700; transition: var(--transition);">
+                                actionBtn = `<button onclick="triggerAudit('${cleanName}', '${cleanFlag}', '${cleanLink}')" style="background: rgba(255, 255, 255, 0.05); border: 1px solid var(--card-border); color: var(--accent); padding: 6px 12px; font-size: 11px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; font-weight: 700; transition: var(--transition);">
                                     <i class="fa-solid fa-magnifying-glass"></i> Audit
                                 </button>`;
                             }
@@ -1406,7 +1407,7 @@
             }
         }
 
-        async function triggerAudit(propertyCode, brand) {
+        async function triggerAudit(propertyCode, brand, spLink) {
             const modal = document.getElementById('design-modal');
             const loading = document.getElementById('modal-loading');
             const results = document.getElementById('modal-results');
@@ -1429,9 +1430,10 @@
             
             propertyCode = propertyCode.replace(/[\r\n\t]+/g, ' ').trim();
             brand = brand ? brand.replace(/[\r\n\t]+/g, ' ').trim() : '';
+            spLink = spLink ? spLink.trim() : '';
             
             try {
-                const url = `/api/check-readiness/${encodeURIComponent(propertyCode)}`;
+                const url = `/api/check-readiness/${encodeURIComponent(propertyCode)}?sp_link=${encodeURIComponent(spLink)}`;
                 const res = await fetch(url);
                 const data = await res.json();
                 
@@ -1448,7 +1450,7 @@
                                 <i class="fa-solid fa-square-check"></i>
                                 Mark Ready on Monday
                             </button>
-                            <button onclick="triggerDesign('${propertyCode}', '${brand}')" class="btn-sync" style="background: linear-gradient(135deg, #00c6fb 0%, #005bea 100%); font-weight:700; border: none; cursor: pointer;">
+                            <button onclick="triggerDesign('${propertyCode}', '${brand}', '${spLink}')" class="btn-sync" style="background: linear-gradient(135deg, #00c6fb 0%, #005bea 100%); font-weight:700; border: none; cursor: pointer;">
                                 <i class="fa-solid fa-bolt"></i>
                                 Run Wi-Fi Design Now
                             </button>
@@ -1459,7 +1461,7 @@
                                 <i class="fa-solid fa-triangle-exclamation"></i>
                                 Force Mark Ready Anyway
                             </button>
-                            <button onclick="triggerDesign('${propertyCode}', '${brand}')" class="btn-sync" style="background: linear-gradient(135deg, #ffb300 0%, #ff6f00 100%); font-weight:700; border: none; cursor: pointer;">
+                            <button onclick="triggerDesign('${propertyCode}', '${brand}', '${spLink}')" class="btn-sync" style="background: linear-gradient(135deg, #ffb300 0%, #ff6f00 100%); font-weight:700; border: none; cursor: pointer;">
                                 <i class="fa-solid fa-bolt"></i>
                                 Force Wi-Fi Design
                             </button>
@@ -1475,7 +1477,7 @@
             }
         }
 
-        async function triggerDesign(propertyCode, brand) {
+        async function triggerDesign(propertyCode, brand, spLink) {
             const modal = document.getElementById('design-modal');
             const loading = document.getElementById('modal-loading');
             const results = document.getElementById('modal-results');
@@ -1497,9 +1499,10 @@
             
             propertyCode = propertyCode.replace(/[\r\n\t]+/g, ' ').trim();
             brand = brand ? brand.replace(/[\r\n\t]+/g, ' ').trim() : '';
+            spLink = spLink ? spLink.trim() : '';
             
             try {
-                const url = `/api/generate-design/${encodeURIComponent(propertyCode)}?brand=${encodeURIComponent(brand)}`;
+                const url = `/api/generate-design/${encodeURIComponent(propertyCode)}?brand=${encodeURIComponent(brand)}&sp_link=${encodeURIComponent(spLink)}`;
                 const res = await fetch(url);
                 
                 let data;

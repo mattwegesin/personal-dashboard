@@ -207,9 +207,10 @@ def get_monday_projects():
             items {
               id
               name
-              column_values(ids: ["person", "color_mkvmrn92", "date4", "status"]) {
+              column_values(ids: ["person", "color_mkvmrn92", "date4", "status", "link_mktk4wh4"]) {
                 id
                 text
+                value
               }
               subitems {
                 id
@@ -256,6 +257,7 @@ def get_monday_projects():
                         'flag': 'N/A',
                         'due_date': 'N/A',
                         'status': 'N/A',
+                        'sp_link': '',
                         'readiness': 'NOT STARTED'  # Default red
                     }
                     
@@ -271,6 +273,12 @@ def get_monday_projects():
                             proj['due_date'] = text_val
                         elif col_id == 'status':
                             proj['status'] = text_val
+                        elif col_id == 'link_mktk4wh4':
+                            try:
+                                val_json = json.loads(cv.get('value') or '{}')
+                                proj['sp_link'] = val_json.get('url', '')
+                            except:
+                                proj['sp_link'] = ''
                             
                     # 2. Parse subitems to evaluate the project's exact workflow stage and readiness
                     subitems = item.get('subitems', []) or []
@@ -467,6 +475,7 @@ def generate_design(property_code):
         return jsonify({'error': 'GEMINI_API_KEY is not configured on the server. Please check your credentials.'}), 500
 
     brand_param = request.args.get('brand', '')
+    sp_link = request.args.get('sp_link', '')
     brand = brand_param.upper().strip() if brand_param and brand_param.strip() else 'IHG'
     if brand == 'N/A' or brand == 'NONE':
         brand = 'IHG'
@@ -489,6 +498,11 @@ def generate_design(property_code):
         f"Activate the 'network-designer' skill. Create a complete, detailed Wi-Fi network design, "
         f"Bill of Materials (BOM) in Markdown table format, a Statement of Work (SOW), and a Logical Network Diagram "
         f"using Mermaid.js syntax for the property code '{property_code}'. Search SharePoint for files matching '{property_code}' "
+    )
+    if sp_link:
+        prompt += f"(specifically at this folder location: '{sp_link}') "
+        
+    prompt += (
         f"to extract the true room counts, wall materials, and floorplans for the design. "
         f"Apply standard brand design parameters based on the reference file '{brand_file}'."
     )
@@ -574,8 +588,15 @@ def generate_design(property_code):
 # API Route: Check SharePoint files for Design Readiness using Gemini CLI
 @app.route('/api/check-readiness/<property_code>')
 def check_readiness(property_code):
+    sp_link = request.args.get('sp_link', '')
+    
     prompt = (
         f"Activate the 'network-design-readiness' skill. Search SharePoint for files matching the property code '{property_code}'. "
+    )
+    if sp_link:
+        prompt += f"(specifically at this folder location: '{sp_link}') "
+        
+    prompt += (
         f"Evaluate the discovered files for design readiness. List the files found and explain if they contain the floorplans, "
         f"wall materials, scales, and room counts needed to generate a professional Wi-Fi network design. "
         f"Conclude the report with a clear line: 'Overall Status: READY' if ready, or 'Overall Status: INCOMPLETE' if missing info."
