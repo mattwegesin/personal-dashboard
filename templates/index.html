@@ -1158,13 +1158,16 @@
                                 readinessBadge = '<span class="badge" style="background-color: rgba(255, 23, 68, 0.12); color: var(--danger); font-weight: 700; gap: 6px; display: inline-flex; align-items: center;"><i class="fa-regular fa-circle" style="font-size: 10px;"></i> Not Started</span>';
                             }
                             
+                            let cleanName = p.name.replace(/[\r\n]+/g, ' ').replace(/'/g, "\\'").trim();
+                            let cleanFlag = p.flag !== 'N/A' ? p.flag.replace(/[\r\n]+/g, ' ').replace(/'/g, "\\'").trim() : '';
+                            
                             let actionBtn = '';
                             if (p.readiness === 'READY' || p.readiness === 'SUBMITTED') {
-                                actionBtn = `<button onclick="triggerDesign('${p.name}', '${p.flag}')" style="background: linear-gradient(135deg, #00c6fb 0%, #005bea 100%); padding: 6px 12px; font-size: 11px; border-radius: 4px; box-shadow: 0 2px 6px rgba(0, 198, 251, 0.2); display: flex; align-items: center; gap: 4px; border: none; color: white; cursor: pointer; font-weight: 700; transition: var(--transition);">
+                                actionBtn = `<button onclick="triggerDesign('${cleanName}', '${cleanFlag}')" style="background: linear-gradient(135deg, #00c6fb 0%, #005bea 100%); padding: 6px 12px; font-size: 11px; border-radius: 4px; box-shadow: 0 2px 6px rgba(0, 198, 251, 0.2); display: flex; align-items: center; gap: 4px; border: none; color: white; cursor: pointer; font-weight: 700; transition: var(--transition);">
                                     <i class="fa-solid fa-bolt"></i> Design
                                 </button>`;
                             } else {
-                                actionBtn = `<button onclick="triggerAudit('${p.name}', '${p.flag}')" style="background: rgba(255, 255, 255, 0.05); border: 1px solid var(--card-border); color: var(--accent); padding: 6px 12px; font-size: 11px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; font-weight: 700; transition: var(--transition);">
+                                actionBtn = `<button onclick="triggerAudit('${cleanName}', '${cleanFlag}')" style="background: rgba(255, 255, 255, 0.05); border: 1px solid var(--card-border); color: var(--accent); padding: 6px 12px; font-size: 11px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; font-weight: 700; transition: var(--transition);">
                                     <i class="fa-solid fa-magnifying-glass"></i> Audit
                                 </button>`;
                             }
@@ -1424,6 +1427,9 @@
             document.getElementById('tab-diagram').classList.remove('active');
             document.querySelector('[onclick*="tab-diagram"]').style.display = 'none';
             
+            propertyCode = propertyCode.replace(/[\r\n\t]+/g, ' ').trim();
+            brand = brand ? brand.replace(/[\r\n\t]+/g, ' ').trim() : '';
+            
             try {
                 const url = `/api/check-readiness/${encodeURIComponent(propertyCode)}`;
                 const res = await fetch(url);
@@ -1488,6 +1494,9 @@
             document.querySelector('[onclick*="tab-sow"]').classList.add('active');
             document.getElementById('tab-sow').classList.add('active');
             document.getElementById('tab-diagram').classList.remove('active');
+            
+            propertyCode = propertyCode.replace(/[\r\n\t]+/g, ' ').trim();
+            brand = brand ? brand.replace(/[\r\n\t]+/g, ' ').trim() : '';
             
             try {
                 const url = `/api/generate-design/${encodeURIComponent(propertyCode)}?brand=${encodeURIComponent(brand)}`;
