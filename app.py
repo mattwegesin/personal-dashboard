@@ -484,46 +484,14 @@ def generate_design(property_code):
     elif 'OMADA' in brand:
         brand_file = 'independent-omada.md'
         
-    context = get_reference_content(brand_file)
-    
-    # Build the final prompt for Gemini
+    # Build the final prompt for Gemini CLI
     prompt = (
-        f"Create a complete, detailed Wi-Fi network design, "
+        f"Activate the 'network-designer' skill. Create a complete, detailed Wi-Fi network design, "
         f"Bill of Materials (BOM) in Markdown table format, a Statement of Work (SOW), and a Logical Network Diagram "
-        f"using Mermaid.js syntax for the property code '{property_code}'. Search your files or reference data for "
-        f"any floorplans, layout details, and room counts matching '{property_code}'."
+        f"using Mermaid.js syntax for the property code '{property_code}'. Search SharePoint for files matching '{property_code}' "
+        f"to extract the true room counts, wall materials, and floorplans for the design. "
+        f"Apply standard brand design parameters based on the reference file '{brand_file}'."
     )
-    
-    if context:
-        prompt += f"\n\n--- REFERENCE BRAND STANDARD REFERENCE DATA ({brand_file}) ---\n{context}"
-        
-    # Append the custom SOW and Network Diagram instructions
-    sys_instruction = NETWORK_DESIGNER_INSTRUCTION + """
-
-    ### Statement of Work (SOW) Generation
-    You must also generate a Statement of Work based on the standard format. 
-    Maintain the professional formatting:
-    - Executive Summary
-    - Scope of Work
-    - Deliverables
-    - Timeline
-    - Exclusions
-    - Pricing Structure
-
-    Crucially, populate **Section 3.1 (Equipment)** with the specific hardware required for each equipment room (MDF/IDF) based on your network design BOM.
-    Format for Section 3.1:
-    #### 3.1 Equipment per Location
-    - **MDF (Main Distribution Frame)**
-    - [Quantity] x [Part Number] - [Description]
-    - **IDF [Number] (Intermediate Distribution Frame)**
-    - [Quantity] x [Part Number] - [Description]
-    
-    ### Logical Network Diagram
-    You must generate a logical network diagram using Mermaid.js syntax. 
-    Use a Markdown code block with `mermaid` as the language (i.e. ```mermaid).
-    Map the connections from the Gateway -> MDF -> IDFs -> Switches -> APs.
-    Keep it high-level and clear.
-    """
     
     # Path for storing results
     output_dir = os.path.join(os.path.dirname(__file__), 'static', 'designs')
@@ -533,20 +501,16 @@ def generate_design(property_code):
     excel_file_path = os.path.join(output_dir, f"{property_code}_BOM.xlsx")
     
     try:
-        # Call Gemini API directly via Google GenAI SDK
-        client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(
-            model='gemini-3.1-pro-preview',  # Upgraded to pro for maximum quality and design compliance
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=sys_instruction,
-                temperature=0.2, # Low temperature for accurate deterministic BOMs
-            )
-        )
+        # Run Gemini CLI in correct path environment using absolute path
+        env = os.environ.copy()
+        env['PATH'] = f"/opt/homebrew/bin:/usr/local/bin:{env.get('PATH', '')}"
         
-        raw_markdown = response.text
+        cmd = ["/opt/homebrew/bin/gemini", "-p", prompt, "--approval-mode", "yolo"]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True, env=env)
+        
+        raw_markdown = result.stdout
         if not raw_markdown:
-            return jsonify({'error': "Gemini API returned an empty response"}), 500
+            return jsonify({'error': "Gemini CLI returned an empty response"}), 500
             
         # Save raw report
         with open(md_file_path, "w") as f:
@@ -601,55 +565,33 @@ def generate_design(property_code):
             'excel_download_url': f"/static/designs/{property_code}_BOM.xlsx" if os.path.exists(excel_file_path) else None
         })
         
+    except subprocess.CalledProcessError as e:
+        err_msg = e.stderr or e.stdout or str(e)
+        return jsonify({'error': f"Gemini CLI execution failed: {err_msg}"}), 500
     except Exception as e:
         return jsonify({'error': f"Gemini API execution failed: {str(e)}"}), 500
 
-# API Route: Check SharePoint files for Design Readiness using Pure Python Google GenAI SDK
+# API Route: Check SharePoint files for Design Readiness using Gemini CLI
 @app.route('/api/check-readiness/<property_code>')
 def check_readiness(property_code):
-    api_key = os.environ.get('GEMINI_API_KEY')
-    if not api_key:
-        design_env = find_workspace_file('.env', 'network_design_web')
-        if os.path.exists(design_env):
-            try:
-                with open(design_env, 'r') as f:
-                    for line in f:
-                        if 'GEMINI_API_KEY=' in line:
-                            api_key = line.split('GEMINI_API_KEY=', 1)[1].strip().strip('"\'')
-                            break
-            except Exception:
-                pass
-                
-    if not api_key:
-        return jsonify({'error': 'GEMINI_API_KEY is not configured on the server. Please check your credentials.'}), 500
-        
-    context = get_reference_content('design-criteria.md')
-    
     prompt = (
-        f"Search SharePoint or your referenced files for files matching the property code '{property_code}'. "
+        f"Activate the 'network-design-readiness' skill. Search SharePoint for files matching the property code '{property_code}'. "
         f"Evaluate the discovered files for design readiness. List the files found and explain if they contain the floorplans, "
         f"wall materials, scales, and room counts needed to generate a professional Wi-Fi network design. "
         f"Conclude the report with a clear line: 'Overall Status: READY' if ready, or 'Overall Status: INCOMPLETE' if missing info."
     )
     
-    if context:
-        prompt += f"\n\n--- GENERAL DESIGN CRITERIA STANDARD ---\n{context}"
-        
     try:
-        # Call Gemini API directly via Google GenAI SDK
-        client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(
-            model='gemini-3.1-pro-preview',
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=READINESS_INSTRUCTION,
-                temperature=0.2,
-            )
-        )
+        # Run Gemini CLI using absolute path
+        env = os.environ.copy()
+        env['PATH'] = f"/opt/homebrew/bin:/usr/local/bin:{env.get('PATH', '')}"
         
-        raw_markdown = response.text
+        cmd = ["/opt/homebrew/bin/gemini", "-p", prompt, "--approval-mode", "yolo"]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True, env=env)
+        
+        raw_markdown = result.stdout
         if not raw_markdown:
-            return jsonify({'error': "Gemini API returned an empty response"}), 500
+            return jsonify({'error': "Gemini CLI returned an empty response"}), 500
             
         # Check if the output suggests it is ready
         is_ready = "Overall Status: READY" in raw_markdown or "Overall Status: Ready" in raw_markdown or "Status: READY" in raw_markdown
@@ -661,8 +603,11 @@ def check_readiness(property_code):
             'is_ready': is_ready
         })
         
+    except subprocess.CalledProcessError as e:
+        err_msg = e.stderr or e.stdout or str(e)
+        return jsonify({'error': f"Gemini CLI execution failed: {err_msg}"}), 500
     except Exception as e:
-        return jsonify({'error': f"Gemini API execution failed: {str(e)}"}), 500
+        return jsonify({'error': f"Gemini Execution failed: {str(e)}"}), 500
 
 # API Route: Mark Design Readiness subitem as Done on Monday.com
 @app.route('/api/mark-ready/<property_code>', methods=['POST'])
