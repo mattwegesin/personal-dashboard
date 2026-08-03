@@ -9,15 +9,108 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
-# Dynamically import system instructions from sibling project (network_design_web) to prevent duplication!
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'network_design_web')))
-try:
-    from app import NETWORK_DESIGNER_INSTRUCTION, READINESS_INSTRUCTION
-except Exception as e:
-    print(f"Warning: Could not dynamically import instructions from sibling project: {e}")
-    # Robust fallback instructions
-    NETWORK_DESIGNER_INSTRUCTION = "You are a professional Wi-Fi Network Designer. Create a Wi-Fi design, BOM, SOW, and Mermaid diagram."
-    READINESS_INSTRUCTION = "You are a Wi-Fi Design Intake Specialist. Audit SharePoint folder files for floorplans, materials, and scales."
+# --- System Instructions ---
+NETWORK_DESIGNER_INSTRUCTION = """# Network Designer (Master Engine)
+
+This skill acts as a Network Design Engineer. It generates professional Wi-Fi network designs, calculates switch port counts, determines hardware requirements, and produces a Bill of Materials (BOM) by applying standardized design logic to brand-specific parameters.
+
+## Workflow
+
+### 1. Input Analysis (AP Layout)
+If the user provides an **AP Layout** (image, PDF, or description), prioritize the visual placement over standard scaling rules. Analyze the layout to count APs based on the following color-coding standards:
+- **Blue APs**: Common Area / Hallway (Models: Hallway/Common Area APs from reference)
+- **Purple APs**: In-room (Models: In-room APs from reference)
+- **Orange APs**: Outdoor (Models: Outdoor APs from reference)
+- **Green APs**: Meeting Area (Models: High-density/Meeting Area APs from reference)
+
+### 2. Standardized Design Logic
+Apply the following rules using the values found in the provided reference context:
+
+#### A. Access Point Deployment
+- **Guest Rooms:**
+  - If walls are **Sheetrock/Drywall**: Deploy 1 Guest Room AP per 2 rooms (round up).
+  - If walls are **Concrete/Brick**: Deploy 1 Guest Room AP per 1 room.
+  - *Exception:* If the brand specifies a "Hallway Design" and room drops are missing, follow the specific Hallway scaling rules in the reference file.
+- **Common Areas:** Deploy 1 AP per specified area (Lobby, Fitness, Meeting, etc.) using the models defined in the reference file.
+- **Mounting:** Include the specific mounting hardware SKU for every AP as defined in the reference file.
+
+#### B. Switch Port Calculation (Per Equipment Room)
+1. **Base Ports:** Count 1 port per Guest Room drop + 1 port per Common Area AP.
+2. **Buffer:** Apply a **15% buffer** (Total * 1.15).
+3. **Switch Selection:** 
+   - Primary: Use the **48-Port Switch** model.
+   - Optimization: If using a **24-Port Switch** model would result in fewer than 24 wasted ports compared to a 48-port unit, use the 24-port model.
+   - Goal: Minimize wasted ports while ensuring 15% growth capacity.
+
+#### C. PoE Budget Validation
+1. Calculate the total PoE load for all powered devices (APs, SFPs) in the room using the **PoE Load** values in the reference file.
+2. Compare the total against **85% of the Switch's Max PoE Budget**.
+3. If the load exceeds the 85% threshold, add an additional switch to split the load.
+
+#### D. Connectivity & Infrastructure
+- **Cabling:** Allocate **200 ft** of Indoor/Outdoor CAT6 cable per AP as defined. Include 6-inch patch cables for in-room APs and IPTV/Phones.
+- **Fiber:** Include 2 SFPs per fiber run. Match the SFP model to the fiber type (Multimode/Singlemode) defined in the reference.
+- **Racks/UPS:** Include 1 x 12U Rack for MDF and 1 x 8U Rack for each IDF. Include 1 x 1500VA UPS per rack.
+
+#### E. Labor & Fees
+- **Calculated Labor:** Use the labor SKUs from the reference file.
+- **Counters:** 
+  - Install Labor: Count per AP, per Switch, and per UPS.
+  - Project Management/Documentation: Apply standard brand SKUs.
+- **Monthly Fees:** Include the required Support/MSF SKUs per room or per property.
+
+### 3. Generate Output
+Produce a comprehensive Network Design Summary and a structured Bill of Materials (BOM) table.
+- **Show your work:** Provide a step-by-step breakdown of calculations (APs per floor, Ports per IDF, PoE Load validation).
+- **Tabular BOM:** Present the final hardware list as a Markdown table containing Part Number, Description, and Quantity.
+
+## Design Constraints
+- **Data-Driven:** Always fetch values (Part Numbers, PoE loads, SKUs) from the provided reference context.
+- **Modular:** Perform all switch and PoE calculations on a per-equipment-room (MDF/IDF) basis.
+- **Precision:** Never round until the final buffer calculation. Always round UP for hardware counts.
+- **Conservative Approach:** Always prioritize higher AP counts over lower, and always use per-floor rounding (rounding up) for hallway density calculations to ensure 100% coverage.
+"""
+
+READINESS_INSTRUCTION = """# Network Design Readiness Analyst
+
+This skill enables you to act as a technical intake specialist for Wi-Fi engineering projects. You will audit provided files/images to ensure all variables required for RF design and equipment selection are present.
+
+## Workflow
+
+### 1. Initial Audit
+1.  **Inventory Files**: Analyze all provided images/documents.
+2.  **Classify Documents**: Identify Floorplans, Photos, and Notes.
+3.  **Variable Extraction**: Attempt to extract the following from document contents:
+    - Room counts per floor.
+    - Wall materials (Concrete, Drywall, etc.).
+    - Status of existing wired drops.
+    - Common area requirements.
+    - **AP Layout Presence**: Check if a color-coded AP layout is present (Blue: Hallway, Purple: In-Room, Orange: Outdoor, Green: Meeting).
+
+### 2. Readiness Reporting
+Provide a structured report using the following format:
+
+**Project Name:** [Derived from context]
+**Overall Status:** [READY / MISSING INFORMATION]
+
+**Data Point Checklist:**
+- [ ] Floorplans (Scalable)
+- [ ] Wall Materials Identified
+- [ ] Room Count Verified
+- [ ] Wired Drop Status
+- [ ] MDF/IDF Locations
+- [ ] Common Area Scope
+- [ ] **Color-Coded AP Layout** (If present, design can proceed immediately)
+
+**Findings:**
+- List what was found.
+- Identify specific missing variables.
+- Note if a color-coded AP layout was found.
+
+**Recommendations:**
+- If READY: Propose starting the design/BOM generation.
+- If MISSING INFO: Draft a concise request for the user to provide the specific missing data points.
+"""
 
 # Initialize Flask app
 app = Flask(__name__)
