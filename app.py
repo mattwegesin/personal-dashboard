@@ -449,7 +449,7 @@ def generate_design(property_code):
             # Upload files to Gemini API
             for file_path in downloaded_files:
                 try:
-                    uploaded_file = client.files.upload(file=file_path)
+                    uploaded_file = client.files.upload(path=file_path)
                     contents.append(uploaded_file)
                 except Exception as upload_err:
                     print(f"Error uploading {file_path} to Gemini: {upload_err}")
@@ -574,7 +574,7 @@ def check_readiness(property_code):
                 
             for file_path in downloaded_files:
                 try:
-                    uploaded_file = client.files.upload(file=file_path)
+                    uploaded_file = client.files.upload(path=file_path)
                     contents.append(uploaded_file)
                 except Exception as upload_err:
                     print(f"Error uploading {file_path} to Gemini: {upload_err}")
