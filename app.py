@@ -466,10 +466,13 @@ def generate_design(property_code):
     if not api_key:
         return jsonify({'error': 'GEMINI_API_KEY is not configured on the server. Please check your credentials.'}), 500
 
-    brand = request.args.get('brand', 'IHG').upper()
+    brand_param = request.args.get('brand', '')
+    brand = brand_param.upper().strip() if brand_param and brand_param.strip() else 'IHG'
+    if brand == 'N/A' or brand == 'NONE':
+        brand = 'IHG'
     
     # Map brand name to standard reference standards
-    brand_file = 'design-criteria.md'
+    brand_file = 'ihg-meraki.md' # Default to IHG Meraki for unmapped flags
     if 'IHG' in brand:
         brand_file = 'ihg-meraki.md'
     elif 'WESTERN' in brand or 'BW' in brand:
