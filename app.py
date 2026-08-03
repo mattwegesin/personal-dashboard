@@ -258,8 +258,13 @@ def download_sharepoint_files(sp_link, access_token, property_code):
     except Exception as e:
         return [], f"Error downloading SP files: {e}"
 
+# Route: Dashboard Homepage
+@app.route('/')
+def index():
+    return render_template('index.html')
+
 # API Route: Trigger Wi-Fi Design Engine using Pure Python Google GenAI SDK
-@app.route('/api/generate-design/<property_code>')
+@app.route('/api/generate-design/<path:property_code>')
 def generate_design(property_code):
     api_key = os.environ.get('GEMINI_API_KEY')
     if not api_key:
@@ -434,7 +439,7 @@ def generate_design(property_code):
         return jsonify({'error': f"Gemini API execution failed: {str(e)}"}), 500
 
 # API Route: Check SharePoint files for Design Readiness using Pure Python Google GenAI SDK
-@app.route('/api/check-readiness/<property_code>')
+@app.route('/api/check-readiness/<path:property_code>')
 def check_readiness(property_code):
     api_key = os.environ.get('GEMINI_API_KEY')
     if not api_key:
@@ -511,7 +516,7 @@ def check_readiness(property_code):
         return jsonify({'error': f"Gemini API execution failed: {str(e)}"}), 500
 
 # API Route: Mark Design Readiness subitem as Done on Monday.com
-@app.route('/api/mark-ready/<property_code>', methods=['POST'])
+@app.route('/api/mark-ready/<path:property_code>', methods=['POST'])
 def mark_ready(property_code):
     token = creds.get('MONDAY_API_TOKEN')
     board_id = creds.get('BOARD_ID')
